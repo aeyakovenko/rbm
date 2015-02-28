@@ -9,7 +9,8 @@ Library
   exposed-modules:   RBM
   Build-Depends:     base,
                      random,
-                     mtl
+                     mtl,
+                     QuickCheck
 
 Test-Suite test-RBM
     type:       exitcode-stdio-1.0

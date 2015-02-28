@@ -3,8 +3,10 @@ module RBM(rbm
           ,test
           ,energy
           ) where
-import System.Exit (exitFailure)
 
+import Data.Word(Word8)
+import System.Exit (exitFailure)
+import Test.QuickCheck(verboseCheckResult,Result(Success))
 import Control.Monad.State.Lazy(runState
                                ,get
                                ,State
@@ -13,6 +15,7 @@ import Control.Monad.State.Lazy(runState
 import System.Random(RandomGen
                     ,randomRs
                     ,split
+                    ,mkStdGen
                     )
 import Control.Applicative((<$>))
 
@@ -87,6 +90,14 @@ getR = do
    put rd'
    return $ rd
 
+prop_init :: Int -> Word8 -> Word8 -> Bool
+prop_init gen ni nh = (((fi ni) + 1) * ((fi nh) + 1)) == (length $ weights $ fst $ (flip runState) (mkStdGen gen) $ doinit)
+   where
+      doinit = initWeights $ rbm (fi ni) (fi nh)
+      fi = fromIntegral
+
 test :: IO ()
 test = do
-   exitFailure
+   let check (Success {})= return ()
+       check _ = exitFailure
+   check =<< verboseCheckResult prop_init
