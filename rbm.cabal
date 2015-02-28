@@ -1,0 +1,18 @@
+Name:                rbm
+Version:             0.0
+Description:         restricted boltzman machine
+Author:              anatoly yakovenko
+Build-Type:          Simple
+Cabal-Version:       >=1.2
+
+Library
+  exposed-modules:   RBM
+  Build-Depends:     base,
+                     random,
+                     mtl
+
+Test-Suite test-RBM
+    type:       exitcode-stdio-1.0
+    main-is:    RBM.hs
+    ghc-options:  -main-is RBM.test -Werror -Wall
+    build-depends: base
