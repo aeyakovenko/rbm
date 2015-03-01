@@ -2,10 +2,11 @@ module RBM(rbm
           ,sample
           ,energy
           ,test
-          ,bench
+          ,perf
           ) where
 
-import Criterion.Main(defaultMain,bgroup,bench,whnf)
+import Criterion.Main(defaultMainWith,defaultConfig,bgroup,bench,whnf)
+import Criterion.Types(reportFile)
 import Data.Word(Word8)
 import System.Exit (exitFailure)
 import Test.QuickCheck(verboseCheckResult)
@@ -118,14 +119,12 @@ test = do
    runtest prop_init
    runtest prop_energy
 
-bench :: IO ()
-bench = do
-bench = defaultMain [ 
-   bgroup "energy" [ bench "127x127"  $ whnf prop_energy 0 127 127
-                   , bench "255x255"  $ whnf prop_energy 0 255 255
+perf :: IO ()
+perf = defaultMainWith (defaultConfig { reportFile = Just "dist/perf-RBM.html" }) [ 
+   bgroup "energy" [ bench "3x3"  $ whnf (prop_energy 0 3) 3
+                   , bench "31x31"  $ whnf (prop_energy 0 31) 31
+                   , bench "63x63"  $ whnf (prop_energy 0 63) 63
+                   , bench "127x127"  $ whnf (prop_energy 0 127) 127
+                   , bench "255x255"  $ whnf (prop_energy 0 255) 255
                    ]
    ]
-
-
-
-   
