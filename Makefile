@@ -5,6 +5,7 @@ cabal_files=rbm.cabal
 dist/cabal.test.ok:dist/cabal.build.ok
 	cabal test 2>&1
 	cabal bench 2>&1
+	rm -f perf-RBM.tix
 	@touch $@
 
 dist/cabal.build.ok:$(hs_files) dist/setup-config
@@ -12,6 +13,7 @@ dist/cabal.build.ok:$(hs_files) dist/setup-config
 	@touch $@
 
 clean:
+	rm -f perf-RBM.tix
 	cabal clean
 
 dist/setup-config:$(cabal_files) Makefile
