@@ -10,6 +10,7 @@ Library
   Build-Depends:     base,
                      random,
                      mtl,
+                     accelerate,
                      QuickCheck,
                      criterion
 

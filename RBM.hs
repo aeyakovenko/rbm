@@ -5,12 +5,18 @@ module RBM(rbm
           ,perf
           ) where
 
+--benchmark modules
 import Criterion.Main(defaultMainWith,defaultConfig,bgroup,bench,whnf)
 import Criterion.Types(reportFile)
-import Data.Word(Word8)
+--test modules
 import System.Exit (exitFailure)
 import Test.QuickCheck(verboseCheckResult)
 import Test.QuickCheck.Test(isSuccess)
+
+--import Data.List.Stream(map,zipWith,take,sum,take,drop,concat,repeat,(!!),replicate,length)
+--import qualified Prelude()
+--import Prelude(($),Double,Int,IO,negate,fromIntegral,return,(*),(/),(+),exp,negate,(.),fst,flip,(<),isNaN,otherwise,(-),Bool,not,(==),(=<<),Maybe(Just))
+import Data.Word(Word8)
 import Control.Monad.State.Lazy(runState
                                ,get
                                ,State
@@ -23,7 +29,7 @@ import System.Random(RandomGen
                     )
 import Control.Applicative((<$>))
 
-data RBM = RBM { weights :: [Double] -- input numHidden x numInputs 
+data RBM = RBM { weights :: [Double] -- weight matrix, numHidden + 1 x numInputs  + 1
                , numInputs :: Int
                , numHidden :: Int
                }
