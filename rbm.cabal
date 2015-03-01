@@ -10,10 +10,15 @@ Library
   Build-Depends:     base,
                      random,
                      mtl,
-                     QuickCheck
+                     QuickCheck,
+                     criterion
 
 Test-Suite test-RBM
     type:       exitcode-stdio-1.0
     main-is:    RBM.hs
     ghc-options:  -main-is RBM.test -Werror -Wall
-    build-depends: base
+
+Benchmark bench-RBM
+    type:       exitcode-stdio-1.0
+    ghc-options:  -main-is RBM.bench -Werror -Wall
+    main-is:    RBM.hs

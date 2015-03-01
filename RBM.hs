@@ -1,12 +1,15 @@
 module RBM(rbm
           ,sample
-          ,test
           ,energy
+          ,test
+          ,bench
           ) where
 
+import Criterion.Main(defaultMain,bgroup,bench,whnf)
 import Data.Word(Word8)
 import System.Exit (exitFailure)
-import Test.QuickCheck(verboseCheckResult,Result(Success))
+import Test.QuickCheck(verboseCheckResult)
+import Test.QuickCheck.Test(isSuccess)
 import Control.Monad.State.Lazy(runState
                                ,get
                                ,State
@@ -19,7 +22,7 @@ import System.Random(RandomGen
                     )
 import Control.Applicative((<$>))
 
-data RBM = RBM { weights :: [Double]
+data RBM = RBM { weights :: [Double] -- input numHidden x numInputs 
                , numInputs :: Int
                , numHidden :: Int
                }
@@ -30,21 +33,23 @@ rbm ni nh = RBM [] ni nh
 energy :: RBM -> [Double] -> Double
 energy rb inputs = negate ee
    where
-      ni = numInputs rb
-      nh = numHidden rb
-      hhs = hiddenProbs rb inputs
+      biased = 1:inputs
+      hhs = hiddenProbs rb biased
       wws = weights rb
-      ee = sum [(inputs !! ii) * (hhs !! jj) * (wws !! (ii * nh + jj)) | ii <- [0..ni], jj <- [0..nh]]
+      ee = sum $ zipWith (*) wws [inp * hid | inp <- biased, hid <- hhs]
 
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 
+groupByN :: Int -> [a] -> [[a]]
+groupByN _ [] = []
+groupByN n ls = (take n ls) : groupByN n (drop n ls)
+
 hiddenProbs :: RBM -> [Double] -> [Double]
-hiddenProbs rb inputs = [sigmoid (sums (weights rb) jj) | jj <- [0..nh]] 
+hiddenProbs rb biased = map (sigmoid . sum) $ groupByN (ni + 1) $ zipWith (*) wws $ concat $ repeat biased 
    where
-      nh = numHidden rb
+      wws = weights rb
       ni = numInputs rb
-      sums wws jj = sum [ (wws !! (ii * nh + jj)) * (inputs !! ii) | ii <- [0..ni] ]
 
 inputProbs :: RBM -> [Double] -> [Double]
 inputProbs rb hidden = [ sigmoid (sums (weights rb) ii) | ii <- [0..ni] ] 
@@ -91,13 +96,36 @@ getR = do
    return $ rd
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
-prop_init gen ni nh = (((fi ni) + 1) * ((fi nh) + 1)) == (length $ weights $ fst $ (flip runState) (mkStdGen gen) $ doinit)
+prop_init gen ni nh = ((fi ni) + 1) * ((fi nh) + 1) == (length $ weights $ fst $ runst $ doinit)
    where
+      runst = (flip runState) (mkStdGen gen)
+      doinit = initWeights $ rbm (fi ni) (fi nh)
+      fi = fromIntegral
+
+prop_energy :: Int -> Word8 -> Word8 -> Bool
+prop_energy gen ni nh = not $ isNaN ee
+   where
+      ee = energy rb $ replicate (fi ni) 0.0
+      rb = fst $ runst $ doinit
+      runst = (flip runState) (mkStdGen gen)
       doinit = initWeights $ rbm (fi ni) (fi nh)
       fi = fromIntegral
 
 test :: IO ()
 test = do
-   let check (Success {})= return ()
-       check _ = exitFailure
-   check =<< verboseCheckResult prop_init
+   let check rr = if (isSuccess rr) then return () else exitFailure
+       runtest p = check =<< verboseCheckResult p 
+   runtest prop_init
+   runtest prop_energy
+
+bench :: IO ()
+bench = do
+bench = defaultMain [ 
+   bgroup "energy" [ bench "127x127"  $ whnf prop_energy 0 127 127
+                   , bench "255x255"  $ whnf prop_energy 0 255 255
+                   ]
+   ]
+
+
+
+   
