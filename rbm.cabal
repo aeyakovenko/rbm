@@ -10,6 +10,7 @@ Library
   Build-Depends:     base,
                      random,
                      mtl,
+                     deepseq,
                      accelerate,
                      QuickCheck,
                      criterion
@@ -17,9 +18,9 @@ Library
 Test-Suite test-RBM
     type:       exitcode-stdio-1.0
     main-is:    RBM.hs
-    ghc-options:  -main-is RBM.test -Werror -Wall
+    ghc-options:  -O3 -main-is RBM.test -Werror -Wall
 
 Benchmark perf-RBM
     type:       exitcode-stdio-1.0
-    ghc-options:  -main-is RBM.perf -Werror -Wall
+    ghc-options:  -O3 -main-is RBM.perf -Werror -Wall
     main-is:    RBM.hs
