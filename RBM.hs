@@ -93,19 +93,19 @@ inputProbs rb hidden = map (sigmoid . sum) $ transpose $ groupByN ni $ zipWith (
 sample :: RandomGen r => r -> RBM -> [Double] -> RBM
 sample rand rb inputs = fst $ (flip runState) rand $ do
    let nh = numHidden rb
-   hrands <- (:) 1 <$> take nh <$> randomRs (0,1) <$> getR
+   hrands <- (:) 0 <$> take nh <$> randomRs (0,1) <$> getR
    let biased = 1:inputs
        hprobs = hiddenProbs rb biased
        ni = numInputs rb
-       applyp pp gg | pp < gg = 1
+       applyp pp gg | pp > gg = 1
                     | otherwise = 0
        hiddenSample = zipWith applyp hprobs hrands 
        w1 = vmult hiddenSample biased 
        iprobs = inputProbs rb hiddenSample
-   irands <- (:) 1 <$> take ni <$>  randomRs (0,1) <$> getR
+   irands <- (:) 0 <$> take ni <$>  randomRs (0,1) <$> getR
    let inputSample = zipWith applyp iprobs irands 
        w2 = vmult hiddenSample inputSample 
-       wd = zipWith (-) w2 w1
+       wd = zipWith (-) w1 w2
        uw = zipWith (+) (weights rb) wd
    return $ rb { weights = uw }
 
@@ -149,10 +149,10 @@ test_sample = map toSample $ tail $ generatedInputs
    where
       input = [0,1]
       generatedInputs = inputProbs lrb generatedHiddenSample 
-      generatedHiddenSample = biasSample $ map toSample $ hiddenProbs lrb (1:input)
-      biasSample ls = 1:(tail ls)
+      generatedHiddenSample = setBias $ map toSample $ hiddenProbs lrb (1:input)
+      setBias ls = 1:(tail ls)
       toSample pp | pp >  0.9 = 1
-      toSample _ = 0
+                  | otherwise = 0
       ni = 2
       nh = 2
       inputs = replicate 1000 $ take ni $ cycle input
