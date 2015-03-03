@@ -1,5 +1,6 @@
 module RBM(rbm
-          ,sample
+          ,learn
+          ,batch
           ,energy
           ,test
           ,perf
@@ -12,36 +13,41 @@ import Criterion.Types(reportFile,timeLimit)
 import System.Exit (exitFailure)
 import Test.QuickCheck(verboseCheckWithResult)
 import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess)
+import Data.Word(Word8)
 
 --impl modules
 import Control.DeepSeq(NFData,rnf,deepseq)
-import Data.Word(Word8)
 import Data.List(transpose)
-import Control.Monad.State.Lazy(runState
-                               ,get
-                               ,State
-                               ,put
-                               )
 import System.Random(RandomGen
                     ,randomRs
                     ,split
                     ,mkStdGen
                     )
-import Control.Applicative((<$>))
 
-data RBM = RBM { weights :: [Double] -- weight matrix with 1 bias nodes, numHidden + 1 x numInputs  + 1
+data RBM = RBM { weights :: [Double] -- weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
                , numInputs :: Int    -- size without bias node
-               , numHidden :: Int    -- size without bias node
+               , _numHidden :: Int   -- size without bias node (not used atm)
                }
 
+-- dethunk the lazy evaluation in batch learning
 instance NFData RBM where
    rnf (RBM wws ni nh) = rnf (wws,ni,nh)
 
+--create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
 rbm r ni nh = RBM nw ni nh
    where
       nw = take ((nh + 1)* (ni + 1)) $ randomRs (0,1) r
 
+-- given a batch of unbiased inputs, update the RBM weights 
+batch :: RandomGen r => r -> RBM -> [[Double]] -> RBM
+batch _ rb [] = rb
+batch rand rb iis =
+   let (rr,nr) = split rand
+       nrb = learn rr rb (head iis) 
+   in  nrb `deepseq` batch nr nrb (tail iis)
+
+-- given an rbm and an input, generate the energy
 energy :: RBM -> [Double] -> Double
 energy rb inputs = negate ee
    where
@@ -50,20 +56,38 @@ energy rb inputs = negate ee
       wws = weights rb
       ee = wws `deepseq` hhs `deepseq` sum $ zipWith (*) wws [inp * hid | inp <- biased, hid <- hhs]
 
-sigmoid :: Double -> Double
-sigmoid d = 1 / (1 + (exp (negate d)))
+-- given an unbiased input, update the RBM weights
+learn :: RandomGen r => r -> RBM -> [Double] -> RBM
+learn rand rb inputs = rb { weights = uw }
+   where
+      (r1,r2) = split rand
+      hiddens = generate r1 rb (1:inputs)
+      newins = regenerate r2 rb hiddens
+      w1 = vmult hiddens (1:inputs)
+      w2 = vmult hiddens newins 
+      wd = zipWith (-) w1 w2
+      uw = zipWith (+) (weights rb) wd
 
-groupByN :: Int -> [a] -> [[a]]
-groupByN _ [] = []
-groupByN n ls = (take n ls) : groupByN n (drop n ls)
+-- given a biased input (1:input), generate a biased hidden layer sample
+generate :: RandomGen r => r -> RBM -> [Double] -> [Double]
+generate rand rb inputs = zipWith applyP (hiddenProbs rb inputs) (0:(randomRs (0,1) rand))
+
+-- given a biased hidden layer sample, generate a biased input layer sample
+regenerate :: RandomGen r => r -> RBM -> [Double] -> [Double]
+regenerate rand rb hidden = zipWith applyP (inputProbs rb hidden) (0:(randomRs (0,1) rand))
+
 
 {--
-    w0 w1 w2
-w0  00 01 02     i0     h0 = w00 * i0 + w01 * i1 + w02 * i2  
-w1  10 11 12  x  i1     h1 = w10 * i0 + w11 * i1 + w12 * i2  
-                 i2
+ - given a biased input generate probabilities of the hidden layer
+ - incuding the biased probability
+ -
+ - basically does the following matrix x vector multiply
+ - 
+ -     w0 w1 w2
+ - w0  00 01 02     i0     h0 = w00 * i0 + w01 * i1 + w02 * i2  
+ - w1  10 11 12  x  i1     h1 = w10 * i0 + w11 * i1 + w12 * i2  
+ -                  i2
 --}
-
 hiddenProbs :: RBM -> [Double] -> [Double]
 hiddenProbs rb biased = map (sigmoid . sum) $ groupByN ni $ zipWith (*) wws $ cycle biased
    where
@@ -71,16 +95,21 @@ hiddenProbs rb biased = map (sigmoid . sum) $ groupByN ni $ zipWith (*) wws $ cy
       ni = (numInputs rb) + 1
 
 {--
-    w0 w1 w2
-w0  00 01 02 
-w1  10 11 12 
-       x
-    h0 h1
-
-i0 = w00 * h0 + w10 * h1
-i1 = w01 * h0 + w11 * h1
-i2 = w02 * h0 + w12 * h1
-
+ - given a biased hidden sample generate probabilities of the input layer
+ - incuding the biased probability
+ -
+ - transpose of the hiddenProbs function
+ - 
+ -     w0 w1 w2
+ - w0  00 01 02 
+ - w1  10 11 12 
+ -        x
+ -     h0 h1
+ - 
+ - i0 = w00 * h0 + w10 * h1
+ - i1 = w01 * h0 + w11 * h1
+ - i2 = w02 * h0 + w12 * h1
+ - 
  --}
 inputProbs :: RBM -> [Double] -> [Double]
 inputProbs rb hidden = map (sigmoid . sum) $ transpose $ groupByN ni $ zipWith (*) wws hhs
@@ -88,50 +117,52 @@ inputProbs rb hidden = map (sigmoid . sum) $ transpose $ groupByN ni $ zipWith (
       hhs = concat $ transpose $ replicate ni hidden
       wws = weights rb
       ni = (numInputs rb) + 1
-      nh = (numHidden rb) + 1
 
-sample :: RandomGen r => r -> RBM -> [Double] -> RBM
-sample rand rb inputs = fst $ (flip runState) rand $ do
-   let nh = numHidden rb
-   hrands <- (:) 0 <$> take nh <$> randomRs (0,1) <$> getR
-   let biased = 1:inputs
-       hprobs = hiddenProbs rb biased
-       ni = numInputs rb
-       applyp pp gg | pp > gg = 1
-                    | otherwise = 0
-       hiddenSample = zipWith applyp hprobs hrands 
-       w1 = vmult hiddenSample biased 
-       iprobs = inputProbs rb hiddenSample
-   irands <- (:) 0 <$> take ni <$>  randomRs (0,1) <$> getR
-   let inputSample = zipWith applyp iprobs irands 
-       w2 = vmult hiddenSample inputSample 
-       wd = zipWith (-) w1 w2
-       uw = zipWith (+) (weights rb) wd
-   return $ rb { weights = uw }
-
-batch :: RandomGen r => r -> RBM -> [[Double]] -> RBM
-batch _ rb [] = rb
-batch rand rb iis =
-   let (rr,nr) = split rand
-       nrb = sample rr rb (head iis) 
-   in  nrb `deepseq` batch nr nrb (tail iis)
+--sample is 0 if generated number gg is less then probabiliy pp
+applyP :: Double -> Double -> Double
+applyP pp gg | pp < gg = 0
+             | otherwise = 1
 
 -- row vec * col vec
+-- or (m x 1) * (1 x c) matrix multiply 
 vmult :: [Double] -> [Double] -> [Double]
 vmult xxs yys = [ (xx*yy) | xx <- xxs, yy<-yys]
 
-getR :: RandomGen r => State r r
-getR = do
-   (rd,rd') <- split <$> get
-   put rd'
-   return $ rd
+-- split a list into lists of equal parts
+-- groupByN 3 [1..] -> [[1,2,3],[4,5,6],[7,8,9]..]
+groupByN :: Int -> [a] -> [[a]]
+groupByN _ [] = []
+groupByN n ls = (take n ls) : groupByN n (drop n ls)
 
-prop_sample :: Word8 -> Word8 -> Bool
-prop_sample ni nh = ln == (length $ weights $ lrb)
+-- sigmoid function
+sigmoid :: Double -> Double
+sigmoid d = 1 / (1 + (exp (negate d)))
+
+-- tests
+
+-- test to see if we can learn a random string
+prop_learned :: Word8 -> Word8 -> Bool
+prop_learned ni' nh' = (tail regened) == input
+   where
+      regened = regenerate (mr 2) lrb $ generate (mr 3) lrb (1:input)
+      --learn the inputs
+      lrb = batch (mr 1) rb inputs
+      rb = rbm (mr 0) ni nh
+      inputs = replicate 1000 $ input
+      --convert a random list of its 0 to 1 to doubles
+      input = map fromIntegral $ take ni $ randomRs (0::Int,1::Int) (mr 4)
+      ni = fromIntegral ni' :: Int
+      nh = fromIntegral nh' :: Int
+      --creates a random number generator with a seed
+      mr i = mkStdGen (ni + nh + i)
+
+
+prop_learn :: Word8 -> Word8 -> Bool
+prop_learn ni nh = ln == (length $ weights $ lrb)
    where
       ln = ((fi ni) + 1) * ((fi nh) + 1)
-      lrb = learn rb 1
-      learn rr ix = sample (mkStdGen ix) rr (take (fi ni) $ cycle [0,1])
+      lrb = learn' rb 1
+      learn' rr ix = learn (mkStdGen ix) rr (take (fi ni) $ cycle [0,1])
       rb = rbm (mkStdGen 0) (fi ni) (fi nh)
       fi = fromIntegral
 
@@ -144,21 +175,6 @@ prop_batch ix ni nh = ln == (length $ weights $ lrb)
       rand = mkStdGen ln
       inputs = replicate (fi ix) $ take (fi ni) $ cycle [0,1]
       fi = fromIntegral
-
-test_sample = map toSample $ tail $ generatedInputs
-   where
-      input = [0,1]
-      generatedInputs = inputProbs lrb generatedHiddenSample 
-      generatedHiddenSample = setBias $ map toSample $ hiddenProbs lrb (1:input)
-      setBias ls = 1:(tail ls)
-      toSample pp | pp >  0.9 = 1
-                  | otherwise = 0
-      ni = 2
-      nh = 2
-      inputs = replicate 1000 $ take ni $ cycle input
-      rand = mkStdGen 0
-      lrb = batch rand rb inputs
-      rb = rbm (mkStdGen 0) ni nh
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
 prop_init gen ni nh = ((fi ni) + 1) * ((fi nh) + 1) == (length $ weights rb)
@@ -225,8 +241,9 @@ test = do
    runtest prop_inputProbs
    runtest prop_inputProbs2
    runtest prop_vmult
-   runtest prop_sample
+   runtest prop_learn
    runtest prop_batch
+   runtest prop_learned
 
 perf :: IO ()
 perf = do
