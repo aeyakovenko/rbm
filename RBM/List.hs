@@ -1,10 +1,9 @@
-module RBM(rbm
-          ,learn
-          ,batch
-          ,energy
-          ,test
-          ,perf
-          ) where
+module RBM.List(rbm
+               ,batch
+               ,energy
+               ,perf
+               ,test
+               ) where
 
 --benchmark modules
 import Criterion.Main(defaultMainWith,defaultConfig,bgroup,bench,whnf)
@@ -12,7 +11,7 @@ import Criterion.Types(reportFile,timeLimit)
 --test modules
 import System.Exit (exitFailure)
 import Test.QuickCheck(verboseCheckWithResult)
-import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess)
+import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
 
 --impl modules
@@ -39,14 +38,6 @@ rbm r ni nh = RBM nw ni nh
    where
       nw = take ((nh + 1)* (ni + 1)) $ randomRs (0,1) r
 
--- given a batch of unbiased inputs, update the RBM weights 
-batch :: RandomGen r => r -> RBM -> [[Double]] -> RBM
-batch _ rb [] = rb
-batch rand rb iis =
-   let (rr,nr) = split rand
-       nrb = learn rr rb (head iis) 
-   in  nrb `deepseq` batch nr nrb (tail iis)
-
 -- given an rbm and an input, generate the energy
 energy :: RBM -> [Double] -> Double
 energy rb inputs = negate ee
@@ -54,11 +45,34 @@ energy rb inputs = negate ee
       biased = 1:inputs
       hhs = hiddenProbs rb biased
       wws = weights rb
-      ee = wws `deepseq` hhs `deepseq` sum $ zipWith (*) wws [inp * hid | inp <- biased, hid <- hhs]
+      ee = hhs `deepseq` sum $ zipWith (*) wws [inp * hid | inp <- biased , hid <- hhs]
 
--- given an unbiased input, update the RBM weights
-learn :: RandomGen r => r -> RBM -> [Double] -> RBM
-learn rand rb inputs = rb { weights = uw }
+-- update the rbm weights from each batch
+learn :: RandomGen r => r -> RBM -> [[[Double]]] -> RBM
+learn _ rb [] = rb
+learn rand rb iis =
+   let (rr,nr) = split rand
+       nrb = batch rr rb (head iis)
+   in  nrb `deepseq` learn nr nrb (tail iis)
+
+-- given a batch of unbiased inputs, update the rbm weights from the batch at once 
+batch :: RandomGen r => r -> RBM -> [[Double]] -> RBM
+batch rand rb inputs = rb { weights = uw }
+   where
+      wd = weightUpdatesLoop rand rb inputs (take (length (weights rb)) [0..])
+      uw = zipWith (+) (weights rb) wd
+
+-- given a batch of unbiased inputs, generate the the RBM weight updates for the batch
+weightUpdatesLoop :: RandomGen r => r -> RBM -> [[Double]] -> [Double] -> [Double]
+weightUpdatesLoop _ _ [] pw = pw
+weightUpdatesLoop rand rb (inputs:rest) pw = weightUpdatesLoop r2 rb rest npw
+   where
+      (r1,r2) = split rand
+      npw = pw `deepseq` weightUpdate r1 rb inputs pw 
+
+-- given an unbiased input, generate the the RBM weight updates
+weightUpdate :: RandomGen r => r -> RBM -> [Double] -> [Double] -> [Double]
+weightUpdate rand rb inputs pw = zipWith (+) pw wd
    where
       (r1,r2) = split rand
       hiddens = generate r1 rb (1:inputs)
@@ -66,7 +80,6 @@ learn rand rb inputs = rb { weights = uw }
       w1 = vmult hiddens (1:inputs)
       w2 = vmult hiddens newins 
       wd = zipWith (-) w1 w2
-      uw = zipWith (+) (weights rb) wd
 
 -- given a biased input (1:input), generate a biased hidden layer sample
 generate :: RandomGen r => r -> RBM -> [Double] -> [Double]
@@ -148,7 +161,7 @@ prop_learned ni' nh' = (tail regened) == input
       --learn the inputs
       lrb = batch (mr 1) rb inputs
       rb = rbm (mr 0) ni nh
-      inputs = replicate 1000 $ input
+      inputs = replicate 2000 $ input
       --convert a random list of its 0 to 1 to doubles
       input = map fromIntegral $ take ni $ randomRs (0::Int,1::Int) (mr 4)
       ni = fromIntegral ni' :: Int
@@ -162,7 +175,7 @@ prop_learn ni nh = ln == (length $ weights $ lrb)
    where
       ln = ((fi ni) + 1) * ((fi nh) + 1)
       lrb = learn' rb 1
-      learn' rr ix = learn (mkStdGen ix) rr (take (fi ni) $ cycle [0,1])
+      learn' rr ix = learn (mkStdGen ix) rr [[(take (fi ni) $ cycle [0,1])]]
       rb = rbm (mkStdGen 0) (fi ni) (fi nh)
       fi = fromIntegral
 
@@ -232,40 +245,39 @@ prop_energy gen ni nh = not $ isNaN ee
 test :: IO ()
 test = do
    let check rr = if (isSuccess rr) then return () else exitFailure
-       cfg = stdArgs { maxSuccess = 50 } 
-       runtest p = check =<< verboseCheckWithResult cfg p 
-   runtest prop_init
-   runtest prop_energy
-   runtest prop_hiddenProbs
-   runtest prop_hiddenProbs2
-   runtest prop_inputProbs
-   runtest prop_inputProbs2
-   runtest prop_vmult
-   runtest prop_learn
-   runtest prop_batch
-   runtest prop_learned
+       cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
+       runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
+   runtest "init"     prop_init
+   runtest "energy"   prop_energy
+   runtest "hiddenp"  prop_hiddenProbs
+   runtest "hiddenp2" prop_hiddenProbs2
+   runtest "inputp"   prop_inputProbs
+   runtest "inputp2"  prop_inputProbs2
+   runtest "vmult"    prop_vmult
+   runtest "learn"    prop_learn
+   runtest "batch"    prop_batch
+   runtest "learned"  prop_learned
 
 perf :: IO ()
 perf = do
    let file = "dist/perf-RBM.html"
-       cfg = defaultConfig { reportFile = Just file, timeLimit = 0.5 }
+       cfg = defaultConfig { reportFile = Just file, timeLimit = 1.0 }
    defaultMainWith cfg [
        bgroup "energy" [ bench "3x3"  $ whnf (prop_energy 0 3) 3
+                       , bench "63x63"  $ whnf (prop_energy 0 63) 63
                        , bench "127x127"  $ whnf (prop_energy 0 127) 127
-                       , bench "255x255"  $ whnf (prop_energy 0 255) 255
                        ]
       ,bgroup "hidden" [ bench "3x3"  $ whnf (prop_hiddenProbs 0 3) 3
+                       , bench "63x63"  $ whnf (prop_hiddenProbs 0 63) 63
                        , bench "127x127"  $ whnf (prop_hiddenProbs 0 127) 127
-                       , bench "255x255"  $ whnf (prop_hiddenProbs 0 255) 255
                        ]
       ,bgroup "input" [ bench "3x3"  $ whnf (prop_inputProbs 0 3) 3
+                      , bench "63x63"  $ whnf (prop_inputProbs 0 63) 63
                       , bench "127x127"  $ whnf (prop_inputProbs 0 127) 127
-                      , bench "255x255"  $ whnf (prop_inputProbs 0 255) 255
                       ]
-      ,bgroup "batch" [ bench "15"  $ whnf (prop_batch 15 63) 63
+      ,bgroup "batch" [ bench "3"  $ whnf (prop_batch 3 63) 63
                       , bench "63"  $ whnf (prop_batch 63 63) 63
                       , bench "127"  $ whnf (prop_batch 127 63) 63
-                      , bench "255"  $ whnf (prop_batch 255 63) 63
                       ]
       ]
    putStrLn $ "perf log written to " ++ file

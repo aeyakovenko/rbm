@@ -6,21 +6,20 @@ Build-Type:          Simple
 Cabal-Version:       >=1.2
 
 Library
-  exposed-modules:   RBM
+  exposed-modules:   RBM.List
   Build-Depends:     base,
                      random,
                      mtl,
-                     deepseq,
-                     accelerate,
                      QuickCheck,
-                     criterion
+                     criterion,
+                     deepseq
 
-Test-Suite test-RBM
-    type:       exitcode-stdio-1.0
-    main-is:    RBM.hs
-    ghc-options:  -O3 -main-is RBM.test -Werror -Wall
+Test-Suite test-list-RBM
+    type:            exitcode-stdio-1.0
+    main-is:         RBM/List.hs
+    ghc-options:     -O3 -main-is RBM.List.test -Werror -Wall
 
-Benchmark perf-RBM
-    type:       exitcode-stdio-1.0
-    ghc-options:  -O3 -main-is RBM.perf -Werror -Wall
-    main-is:    RBM.hs
+Benchmark perf-list-RBM
+    type:            exitcode-stdio-1.0
+    ghc-options:     -O3 -main-is RBM.List.perf -Werror -Wall
+    main-is:         RBM/List.hs

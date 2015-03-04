@@ -1,11 +1,17 @@
 
-hs_files=RBM.hs
+hs_files=RBM/List.hs
 cabal_files=rbm.cabal
 
-dist/cabal.test.ok:dist/cabal.build.ok
-	cabal test 2>&1
+all:dist/cabal.test.ok dist/cabal.perf.ok dist/cabal.build.ok
+
+dist/cabal.perf.ok:$(hs_files) dist/setup-config
 	cabal bench 2>&1
-	rm -f perf-RBM.tix
+	rm -f perf-list-RBM.tix
+	@touch $@
+
+
+dist/cabal.test.ok:$(hs_files) dist/setup-config
+	cabal test 2>&1
 	@touch $@
 
 dist/cabal.build.ok:$(hs_files) dist/setup-config
@@ -13,7 +19,7 @@ dist/cabal.build.ok:$(hs_files) dist/setup-config
 	@touch $@
 
 clean:
-	rm -f perf-RBM.tix
+	rm -f perf-list-RBM.tix
 	cabal clean
 
 dist/setup-config:$(cabal_files) Makefile
