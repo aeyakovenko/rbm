@@ -1,5 +1,5 @@
 module RBM.List(rbm
-               ,batch
+               ,learn
                ,energy
                ,perf
                ,test
@@ -25,7 +25,7 @@ import System.Random(RandomGen
 
 data RBM = RBM { weights :: [Double] -- weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
                , numInputs :: Int    -- size without bias node
-               , _numHidden :: Int   -- size without bias node (not used atm)
+               , numHidden :: Int    -- size without bias node
                }
 
 -- dethunk the lazy evaluation in batch learning
@@ -50,36 +50,37 @@ energy rb inputs = negate ee
 -- update the rbm weights from each batch
 learn :: RandomGen r => r -> RBM -> [[[Double]]] -> RBM
 learn _ rb [] = rb
-learn rand rb iis =
-   let (rr,nr) = split rand
-       nrb = batch rr rb (head iis)
-   in  nrb `deepseq` learn nr nrb (tail iis)
+learn rand rb iis = nrb `deepseq` learn r2 nrb (tail iis)
+   where
+      (r1,r2) = split rand
+      nrb = batch r1 rb (head iis)
 
 -- given a batch of unbiased inputs, update the rbm weights from the batch at once 
 batch :: RandomGen r => r -> RBM -> [[Double]] -> RBM
 batch rand rb inputs = rb { weights = uw }
    where
-      wd = weightUpdatesLoop rand rb inputs (take (length (weights rb)) [0..])
       uw = zipWith (+) (weights rb) wd
+      wd = weightUpdatesLoop rand rb inputs (take len [0..])
+      len = ((numInputs rb) + 1) * ((numHidden rb) + 1)
 
 -- given a batch of unbiased inputs, generate the the RBM weight updates for the batch
 weightUpdatesLoop :: RandomGen r => r -> RBM -> [[Double]] -> [Double] -> [Double]
 weightUpdatesLoop _ _ [] pw = pw
 weightUpdatesLoop rand rb (inputs:rest) pw = weightUpdatesLoop r2 rb rest npw
    where
+      npw = pw `deepseq` zipWith (+) pw wd
+      wd = weightUpdate r1 rb inputs
       (r1,r2) = split rand
-      npw = pw `deepseq` weightUpdate r1 rb inputs pw 
 
 -- given an unbiased input, generate the the RBM weight updates
-weightUpdate :: RandomGen r => r -> RBM -> [Double] -> [Double] -> [Double]
-weightUpdate rand rb inputs pw = zipWith (+) pw wd
+weightUpdate :: RandomGen r => r -> RBM -> [Double] -> [Double]
+weightUpdate rand rb inputs = zipWith (-) w1 w2
    where
       (r1,r2) = split rand
       hiddens = generate r1 rb (1:inputs)
       newins = regenerate r2 rb hiddens
       w1 = vmult hiddens (1:inputs)
       w2 = vmult hiddens newins 
-      wd = zipWith (-) w1 w2
 
 -- given a biased input (1:input), generate a biased hidden layer sample
 generate :: RandomGen r => r -> RBM -> [Double] -> [Double]
@@ -131,7 +132,8 @@ inputProbs rb hidden = map (sigmoid . sum) $ transpose $ groupByN ni $ zipWith (
       wws = weights rb
       ni = (numInputs rb) + 1
 
---sample is 0 if generated number gg is less then probabiliy pp
+--sample is 0 if generated number gg is greater then probabiliy pp
+--so the higher pp the more likely that it will generate a 1
 applyP :: Double -> Double -> Double
 applyP pp gg | pp < gg = 0
              | otherwise = 1
@@ -159,7 +161,7 @@ prop_learned ni' nh' = (tail regened) == input
    where
       regened = regenerate (mr 2) lrb $ generate (mr 3) lrb (1:input)
       --learn the inputs
-      lrb = batch (mr 1) rb inputs
+      lrb = learn (mr 1) rb [inputs]
       rb = rbm (mr 0) ni nh
       inputs = replicate 2000 $ input
       --convert a random list of its 0 to 1 to doubles
