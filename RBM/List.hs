@@ -17,6 +17,7 @@ import Data.Word(Word8)
 --impl modules
 import Control.DeepSeq(NFData,rnf,deepseq)
 import Data.List(transpose)
+import Data.List.Split(chunksOf)
 import System.Random(RandomGen
                     ,randomRs
                     ,split
@@ -103,7 +104,7 @@ regenerate rand rb hidden = zipWith applyP (inputProbs rb hidden) (0:(randomRs (
  -                  i2
 --}
 hiddenProbs :: RBM -> [Double] -> [Double]
-hiddenProbs rb biased = map (sigmoid . sum) $ groupByN ni $ zipWith (*) wws $ cycle biased
+hiddenProbs rb biased = map (sigmoid . sum) $ chunksOf ni $ zipWith (*) wws $ cycle biased
    where
       wws = weights rb
       ni = (numInputs rb) + 1
@@ -126,7 +127,7 @@ hiddenProbs rb biased = map (sigmoid . sum) $ groupByN ni $ zipWith (*) wws $ cy
  - 
  --}
 inputProbs :: RBM -> [Double] -> [Double]
-inputProbs rb hidden = map (sigmoid . sum) $ transpose $ groupByN ni $ zipWith (*) wws hhs
+inputProbs rb hidden = map (sigmoid . sum) $ transpose $ chunksOf ni $ zipWith (*) wws hhs
    where
       hhs = concat $ transpose $ replicate ni hidden
       wws = weights rb
@@ -142,12 +143,6 @@ applyP pp gg | pp < gg = 0
 -- or (m x 1) * (1 x c) matrix multiply 
 vmult :: [Double] -> [Double] -> [Double]
 vmult xxs yys = [ (xx*yy) | xx <- xxs, yy<-yys]
-
--- split a list into lists of equal parts
--- groupByN 3 [1..] -> [[1,2,3],[4,5,6],[7,8,9]..]
-groupByN :: Int -> [a] -> [[a]]
-groupByN _ [] = []
-groupByN n ls = (take n ls) : groupByN n (drop n ls)
 
 -- sigmoid function
 sigmoid :: Double -> Double

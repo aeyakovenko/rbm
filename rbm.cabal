@@ -9,6 +9,7 @@ Library
   exposed-modules:   RBM.List
   Build-Depends:     base,
                      random,
+                     split,
                      mtl,
                      QuickCheck,
                      criterion,
