@@ -21,7 +21,6 @@ import Data.Array.Repa(Array
                       ,DIM1
                       ,Any(Any)
                       ,Z(Z)
-                      ,D
                       ,(:.)((:.))
                       ,slice
                       ,extent
@@ -29,6 +28,9 @@ import Data.Array.Repa(Array
                       ,All(All)
                       ,index
                       ,sumAllP
+                      ,sumAllS
+                      ,deepSeqArray
+                      ,computeUnboxedP
                       )
 import qualified Data.Array.Repa as R
 import System.Random(RandomGen
@@ -47,8 +49,7 @@ numHidden rb = (row $ extent $ weights rb)
 numInputs :: RBM -> Int
 numInputs rb = (col $ extent $ weights rb) 
 
--- dont let this confuse you, its just like a list constructor
--- :. is an infix constructor similar to :
+-- :. is an infix constructor similar to : for lists
 row :: DIM2 -> Int
 row (Z :. r :. _) = r
 
@@ -57,7 +58,6 @@ col (Z :. _ :. c) = c
 
 pos :: DIM1 -> Int
 pos (Z :. i ) = i
-
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -69,25 +69,22 @@ rbm r ni nh = RBM nw
 energy :: RBM -> Array U DIM1 Double -> Double
 energy rb biased = negate ee
    where
-      ee = sumArray $ fromFunction sh (computeEnergyMatrix rb biased)
+      ee = runIdentity $ do
+         hhs <- hiddenProbs rb biased
+         hhs `deepSeqArray` sumAllP $ fromFunction sh (computeEnergyMatrix wws biased hhs)
+      wws = weights rb
       sh = (Z :. nh :. ni)
       ni = numInputs rb
       nh = numHidden rb
 
-sumArray :: Array D DIM2 Double  -> Double
-sumArray ar = runIdentity (sumAllP ar)
-
-computeEnergyMatrix :: RBM -> Array U DIM1 Double -> DIM2 -> Double 
-computeEnergyMatrix rb biased sh = ww * ii * hh
+computeEnergyMatrix ::  Array U DIM2 Double -> Array U DIM1 Double -> Array U DIM1 Double -> DIM2 -> Double 
+computeEnergyMatrix wws biased hhs sh = ww * ii * hh
    where
-      wws = weights rb
-      hhs = hiddenProbs rb biased
       rr = row sh 
       cc = col sh 
       ww = wws `index` sh
       ii = biased `index` (Z :. cc) 
       hh = hhs `index` (Z :. rr)
-
 
 {--
  - given a biased input generate probabilities of the hidden layer
@@ -100,8 +97,8 @@ computeEnergyMatrix rb biased sh = ww * ii * hh
  - w1  10 11 12  x  i1     h1 = w10 * i0 + w11 * i1 + w12 * i2  
  -                  i2
 --}
-hiddenProbs :: RBM -> Array U DIM1 Double -> (Array D DIM1 Double)
-hiddenProbs rb biased = fromFunction shape (computeHiddenProb rb biased)
+hiddenProbs :: Monad m => RBM -> Array U DIM1 Double -> m (Array U DIM1 Double)
+hiddenProbs rb biased = computeUnboxedP $ fromFunction shape (computeHiddenProb rb biased)
    where
       shape = (Z :. (numHidden rb))
 
@@ -110,7 +107,8 @@ computeHiddenProb rb biased xi = sigmoid sm
    where
       rw = slice wws (Any :. (pos xi) :. All)
       wws = weights rb
-      sm = runIdentity $ sumAllP $ R.zipWith (*) rw biased
+      --cant use parallel sum, or we get nested data dep warnings
+      sm = sumAllS $ R.zipWith (*) rw biased
 
 -- 
 -- -- update the rbm weights from each batch

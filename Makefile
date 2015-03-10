@@ -5,7 +5,7 @@ all:dist/cabal.test.ok dist/cabal.perf.ok dist/cabal.build.ok
 
 dist/cabal.perf.ok:$(hs_files) dist/setup-config
 	cabal bench 2>&1
-	rm -f perf-list-RBM.tix
+	rm -f *.tix
 	@touch $@
 
 dist/cabal.test.ok:$(hs_files) dist/setup-config
@@ -17,12 +17,12 @@ dist/cabal.build.ok:$(hs_files) dist/setup-config
 	@touch $@
 
 clean:
-	rm -f perf-list-RBM.tix
+	rm -f *.tix
 	cabal clean
 
 dist/setup-config:$(cabal_files) Makefile
 	cabal install --only-dependencies
-	cabal configure --enable-tests --enable-coverage --enable-library-profiling
+	cabal configure --enable-tests --enable-coverage --enable-library-profiling --enable-benchmarks
 	@touch $@
 
 $$%:;@$(call true)$(info $(call or,$$$*))

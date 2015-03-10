@@ -20,32 +20,29 @@ Library
 Test-Suite test-list-RBM
     type:            exitcode-stdio-1.0
     main-is:         RBM/List.hs
-    ghc-options:     -O3 -main-is RBM.List.test -Werror -Wall
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.test
 
 Test-Suite perf-list-cov-RBM
     type:            exitcode-stdio-1.0
     main-is:         RBM/List.hs
-    ghc-options:     -O3 -main-is RBM.List.perf -Werror -Wall
-
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.perf
 
 Benchmark perf-list-RBM
     type:            exitcode-stdio-1.0
-    ghc-options:     -O3 -main-is RBM.List.perf -Werror -Wall
     main-is:         RBM/List.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.perf
 
 Test-Suite test-repa-RBM
     type:            exitcode-stdio-1.0
     main-is:         RBM/Repa.hs
-    ghc-options:     -O3 -main-is RBM.Repa.test -Werror -Wall
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.Repa.test
 
 Test-Suite perf-repa-cov-RBM
     type:            exitcode-stdio-1.0
     main-is:         RBM/Repa.hs
-    ghc-options:     -O3 -main-is RBM.Repa.perf -Werror -Wall
-
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.Repa.perf
 
 Benchmark perf-repa-RBM
     type:            exitcode-stdio-1.0
-    ghc-options:     -O3 -main-is RBM.Repa.perf -Werror -Wall
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.Repa.perf
     main-is:         RBM/Repa.hs
-
