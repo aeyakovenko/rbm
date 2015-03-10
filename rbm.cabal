@@ -6,11 +6,13 @@ Build-Type:          Simple
 Cabal-Version:       >=1.2
 
 Library
-  exposed-modules:   RBM.List
+  exposed-modules:   RBM.List, RBM.Repa
   Build-Depends:     base,
                      random,
                      split,
                      mtl,
+                     repa,
+                     repa-algorithms,
                      QuickCheck,
                      criterion,
                      deepseq
@@ -20,7 +22,30 @@ Test-Suite test-list-RBM
     main-is:         RBM/List.hs
     ghc-options:     -O3 -main-is RBM.List.test -Werror -Wall
 
+Test-Suite perf-list-cov-RBM
+    type:            exitcode-stdio-1.0
+    main-is:         RBM/List.hs
+    ghc-options:     -O3 -main-is RBM.List.perf -Werror -Wall
+
+
 Benchmark perf-list-RBM
     type:            exitcode-stdio-1.0
     ghc-options:     -O3 -main-is RBM.List.perf -Werror -Wall
     main-is:         RBM/List.hs
+
+Test-Suite test-repa-RBM
+    type:            exitcode-stdio-1.0
+    main-is:         RBM/Repa.hs
+    ghc-options:     -O3 -main-is RBM.Repa.test -Werror -Wall
+
+Test-Suite perf-repa-cov-RBM
+    type:            exitcode-stdio-1.0
+    main-is:         RBM/Repa.hs
+    ghc-options:     -O3 -main-is RBM.Repa.perf -Werror -Wall
+
+
+Benchmark perf-repa-RBM
+    type:            exitcode-stdio-1.0
+    ghc-options:     -O3 -main-is RBM.Repa.perf -Werror -Wall
+    main-is:         RBM/Repa.hs
+
