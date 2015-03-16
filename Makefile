@@ -22,7 +22,8 @@ clean:
 
 dist/setup-config:$(cabal_files) Makefile
 	cabal install --only-dependencies
-	cabal configure --enable-tests --enable-coverage --enable-library-profiling --enable-benchmarks
+	#cabal configure --enable-tests --enable-coverage --enable-library-profiling --enable-benchmarks
+	cabal configure --enable-tests --enable-benchmarks
 	@touch $@
 
 $$%:;@$(call true)$(info $(call or,$$$*))

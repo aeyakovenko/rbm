@@ -1,5 +1,5 @@
 module RBM.Repa(rbm
-              -- ,learn
+               --,learn
                ,energy
                ,perf
                ,test
@@ -22,15 +22,7 @@ import Data.Array.Repa(Array
                       ,Any(Any)
                       ,Z(Z)
                       ,(:.)((:.))
-                      ,slice
-                      ,extent
-                      ,fromFunction
                       ,All(All)
-                      ,index
-                      ,sumAllP
-                      ,sumAllS
-                      ,deepSeqArray
-                      ,computeUnboxedP
                       )
 import qualified Data.Array.Repa as R
 import System.Random(RandomGen
@@ -44,10 +36,10 @@ data RBM = RBM { weights :: Array U DIM2 Double -- weight matrix with 1 bias nod
                }
 
 numHidden :: RBM -> Int
-numHidden rb = (row $ extent $ weights rb) 
+numHidden rb = (row $ R.extent $ weights rb) 
 
 numInputs :: RBM -> Int
-numInputs rb = (col $ extent $ weights rb) 
+numInputs rb = (col $ R.extent $ weights rb) 
 
 -- :. is an infix constructor similar to : for lists
 row :: DIM2 -> Int
@@ -65,52 +57,82 @@ rbm r ni nh = RBM nw
    where
       nw = randomishDoubleArray (Z :. nh :. ni) 0 1 (fst $ random r)
 
--- given an rbm and a biased input array, generate the energy
+{-- 
+ - given an rbm and a biased input array, generate the energy
+ - should be: negate $ sumAll $ weights *^ (hidden `tensor` biased)
+ - but everything is unrolled to experiment with Repa's parallelization
+ --}
 energy :: RBM -> Array U DIM1 Double -> Double
 energy rb biased = negate ee
    where
-      ee = runIdentity $ do
-         hhs <- hiddenProbs rb biased
-         hhs `deepSeqArray` sumAllP $ fromFunction sh (computeEnergyMatrix wws biased hhs)
+      ee = runIdentity $ hhs `R.deepSeqArray` R.sumAllP $ R.fromFunction sh (computeEnergyMatrix wws biased hhs)
       wws = weights rb
+      hhs = hiddenProbs rb biased
       sh = (Z :. nh :. ni)
       ni = numInputs rb
       nh = numHidden rb
 
+{-# INLINE computeEnergyMatrix #-}
 computeEnergyMatrix ::  Array U DIM2 Double -> Array U DIM1 Double -> Array U DIM1 Double -> DIM2 -> Double 
 computeEnergyMatrix wws biased hhs sh = ww * ii * hh
    where
       rr = row sh 
       cc = col sh 
-      ww = wws `index` sh
-      ii = biased `index` (Z :. cc) 
-      hh = hhs `index` (Z :. rr)
+      ww = wws `R.index` sh
+      ii = biased `R.index` (Z :. cc) 
+      hh = hhs `R.index` (Z :. rr)
 
 {--
  - given a biased input generate probabilities of the hidden layer
  - incuding the biased probability
  -
- - basically does the following matrix x vector multiply
+ - map sigmoid $ weights `mmult` biased
+ -
  - 
- -     w0 w1 w2
- - w0  00 01 02     i0     h0 = w00 * i0 + w01 * i1 + w02 * i2  
- - w1  10 11 12  x  i1     h1 = w10 * i0 + w11 * i1 + w12 * i2  
- -                  i2
---}
-hiddenProbs :: Monad m => RBM -> Array U DIM1 Double -> m (Array U DIM1 Double)
-hiddenProbs rb biased = computeUnboxedP $ fromFunction shape (computeHiddenProb rb biased)
+ --}
+{-# INLINE hiddenProbs #-}
+hiddenProbs :: RBM -> Array U DIM1 Double -> Array U DIM1 Double
+hiddenProbs rb biased = R.computeUnboxedS $ R.fromFunction shape (computeHiddenProb wws biased)
    where
+      wws = weights rb
       shape = (Z :. (numHidden rb))
 
-computeHiddenProb :: RBM -> Array U DIM1 Double -> DIM1 -> Double
-computeHiddenProb rb biased xi = sigmoid sm
+{--
+ - sigmoid of the dot product of the row
+ --}
+{-# INLINE computeHiddenProb #-}
+computeHiddenProb :: Array U DIM2 Double -> Array U DIM1 Double -> DIM1 -> Double
+computeHiddenProb wws biased xi = sigmoid sm
    where
-      rw = slice wws (Any :. (pos xi) :. All)
-      wws = weights rb
-      --cant use parallel sum, or we get nested data dep warnings
-      sm = sumAllS $ R.zipWith (*) rw biased
+      rw = R.slice wws (Any :. (pos xi) :. All)
+      sm = R.sumAllS $ R.zipWith (*) rw biased
 
--- 
+{--
+ - given a biased hidden sample generate probabilities of the input layer
+ - incuding the biased probability
+ -
+ - transpose of the hiddenProbs function
+ -
+ - map sigmoid $ (transpose inputs) `mmult` weights
+ - 
+ --} 
+{-# INLINE inputProbs #-}
+inputProbs :: RBM -> Array U DIM1 Double -> Array U DIM1 Double
+inputProbs rb hidden = R.computeUnboxedS $ R.fromFunction shape (computeInputProb wws hidden)
+   where
+      shape = (Z :. (numInputs rb))
+      wws = weights rb
+
+{--
+ - sigmoid of the dot product of the col
+ --}
+{-# INLINE computeInputProb #-}
+computeInputProb :: Array U DIM2 Double -> Array U DIM1 Double -> DIM1 -> Double
+computeInputProb wws hidden xi = sigmoid sm
+   where
+      rw = R.slice wws (Any :. (pos xi))
+      sm = R.sumAllS $ R.zipWith (*) rw hidden
+
 -- -- update the rbm weights from each batch
 -- learn :: RandomGen r => r -> RBM -> [[[Double]]] -> RBM
 -- learn _ rb [] = rb
@@ -156,30 +178,6 @@ computeHiddenProb rb biased xi = sigmoid sm
 -- 
 -- 
 -- 
--- {--
---  - given a biased hidden sample generate probabilities of the input layer
---  - incuding the biased probability
---  -
---  - transpose of the hiddenProbs function
---  - 
---  -     w0 w1 w2
---  - w0  00 01 02 
---  - w1  10 11 12 
---  -        x
---  -     h0 h1
---  - 
---  - i0 = w00 * h0 + w10 * h1
---  - i1 = w01 * h0 + w11 * h1
---  - i2 = w02 * h0 + w12 * h1
---  - 
---  --}
--- inputProbs :: RBM -> [Double] -> [Double]
--- inputProbs rb hidden = map (sigmoid . sum) $ transpose $ chunksOf ni $ zipWith (*) wws hhs
---    where
---       hhs = concat $ transpose $ replicate ni hidden
---       wws = weights rb
---       ni = (numInputs rb) + 1
--- 
 -- --sample is 0 if generated number gg is greater then probabiliy pp
 -- --so the higher pp the more likely that it will generate a 1
 -- applyP :: Double -> Double -> Double
@@ -193,6 +191,7 @@ computeHiddenProb rb biased xi = sigmoid sm
 -- 
 
 -- sigmoid function
+{-# INLINE sigmoid #-}
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 
@@ -282,7 +281,7 @@ prop_init gen ni nh = (fi ni) * (fi nh)  == (length $ R.toList $ weights rb)
 --       pp = inputProbs rb [h0,h1]
 --       rb = RBM wws 2 1
 -- 
-prop_energy :: Int -> Word8 -> Word8 -> Bool
+prop_energy :: Int -> Int -> Int -> Bool
 prop_energy gen ni nh = not $ isNaN ee
    where
       ee = energy rb input
@@ -310,11 +309,12 @@ perf :: IO ()
 perf = do
    let file = "dist/perf-RBM.html"
        cfg = defaultConfig { reportFile = Just file, timeLimit = 1.0 }
+       sz = 4096
+       input = randomishDoubleArray (Z :. sz) 0 1 0
+       rb = rbm (mkStdGen 0) sz sz
    defaultMainWith cfg [
-         bgroup "energy" [ bench "3x3"  $ whnf (prop_energy 0 3) 3
-                        , bench "63x63"  $ whnf (prop_energy 0 63) 63
-                        , bench "127x127"  $ whnf (prop_energy 0 127) 127
-                        ]
+         bgroup "energy" [ bench (show sz) $ whnf (energy rb) input
+                         ]
       ]
 --       ,bgroup "hidden" [ bench "3x3"  $ whnf (prop_hiddenProbs 0 3) 3
 --                        , bench "63x63"  $ whnf (prop_hiddenProbs 0 63) 63
