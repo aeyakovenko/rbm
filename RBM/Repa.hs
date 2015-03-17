@@ -48,8 +48,9 @@ row (Z :. r :. _) = r
 col :: DIM2 -> Int
 col (Z :. _ :. c) = c
 
-pos :: DIM1 -> Int
-pos (Z :. i ) = i
+len :: DIM1 -> Int
+len (Z :. i ) = i
+{-# INLINE len #-}
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -72,7 +73,6 @@ energy rb biased = negate ee
       ni = numInputs rb
       nh = numHidden rb
 
-{-# INLINE computeEnergyMatrix #-}
 computeEnergyMatrix ::  Array U DIM2 Double -> Array U DIM1 Double -> Array U DIM1 Double -> DIM2 -> Double 
 computeEnergyMatrix wws biased hhs sh = ww * ii * hh
    where
@@ -81,6 +81,7 @@ computeEnergyMatrix wws biased hhs sh = ww * ii * hh
       ww = wws `R.index` sh
       ii = biased `R.index` (Z :. cc) 
       hh = hhs `R.index` (Z :. rr)
+{-# INLINE computeEnergyMatrix #-}
 
 {--
  - given a biased input generate probabilities of the hidden layer
@@ -90,22 +91,22 @@ computeEnergyMatrix wws biased hhs sh = ww * ii * hh
  -
  - 
  --}
-{-# INLINE hiddenProbs #-}
 hiddenProbs :: RBM -> Array U DIM1 Double -> Array U DIM1 Double
 hiddenProbs rb biased = R.computeUnboxedS $ R.fromFunction shape (computeHiddenProb wws biased)
    where
       wws = weights rb
       shape = (Z :. (numHidden rb))
+{-# INLINE hiddenProbs #-}
 
 {--
  - sigmoid of the dot product of the row
  --}
-{-# INLINE computeHiddenProb #-}
 computeHiddenProb :: Array U DIM2 Double -> Array U DIM1 Double -> DIM1 -> Double
 computeHiddenProb wws biased xi = sigmoid sm
    where
-      rw = R.slice wws (Any :. (pos xi) :. All)
+      rw = R.slice wws (Any :. (len xi) :. All)
       sm = R.sumAllS $ R.zipWith (*) rw biased
+{-# INLINE computeHiddenProb #-}
 
 {--
  - given a biased hidden sample generate probabilities of the input layer
@@ -116,84 +117,105 @@ computeHiddenProb wws biased xi = sigmoid sm
  - map sigmoid $ (transpose inputs) `mmult` weights
  - 
  --} 
-{-# INLINE inputProbs #-}
 inputProbs :: RBM -> Array U DIM1 Double -> Array U DIM1 Double
 inputProbs rb hidden = R.computeUnboxedS $ R.fromFunction shape (computeInputProb wws hidden)
    where
       shape = (Z :. (numInputs rb))
       wws = weights rb
+{-# INLINE inputProbs #-}
 
 {--
  - sigmoid of the dot product of the col
  --}
-{-# INLINE computeInputProb #-}
 computeInputProb :: Array U DIM2 Double -> Array U DIM1 Double -> DIM1 -> Double
 computeInputProb wws hidden xi = sigmoid sm
    where
-      rw = R.slice wws (Any :. (pos xi))
+      rw = R.slice wws (Any :. (len xi))
       sm = R.sumAllS $ R.zipWith (*) rw hidden
+{-# INLINE computeInputProb #-}
 
--- -- update the rbm weights from each batch
--- learn :: RandomGen r => r -> RBM -> [[[Double]]] -> RBM
--- learn _ rb [] = rb
--- learn rand rb iis = nrb `deepseq` learn r2 nrb (tail iis)
---    where
---       (r1,r2) = split rand
---       nrb = batch r1 rb (head iis)
--- 
--- -- given a batch of unbiased inputs, update the rbm weights from the batch at once 
--- batch :: RandomGen r => r -> RBM -> [[Double]] -> RBM
--- batch rand rb inputs = rb { weights = uw }
---    where
---       uw = zipWith (+) (weights rb) wd
---       wd = weightUpdatesLoop rand rb inputs (take len [0..])
---       len = ((numInputs rb) + 1) * ((numHidden rb) + 1)
--- 
--- -- given a batch of unbiased inputs, generate the the RBM weight updates for the batch
--- weightUpdatesLoop :: RandomGen r => r -> RBM -> [[Double]] -> [Double] -> [Double]
--- weightUpdatesLoop _ _ [] pw = pw
--- weightUpdatesLoop rand rb (inputs:rest) pw = weightUpdatesLoop r2 rb rest npw
---    where
---       npw = pw `deepseq` zipWith (+) pw wd
---       wd = weightUpdate r1 rb inputs
---       (r1,r2) = split rand
--- 
--- -- given an unbiased input, generate the the RBM weight updates
--- weightUpdate :: RandomGen r => r -> RBM -> [Double] -> [Double]
--- weightUpdate rand rb inputs = zipWith (-) w1 w2
---    where
---       (r1,r2) = split rand
---       hiddens = generate r1 rb (1:inputs)
---       newins = regenerate r2 rb hiddens
---       w1 = vmult hiddens (1:inputs)
---       w2 = vmult hiddens newins 
--- 
--- -- given a biased input (1:input), generate a biased hidden layer sample
--- generate :: RandomGen r => r -> RBM -> [Double] -> [Double]
--- generate rand rb inputs = zipWith applyP (hiddenProbs rb inputs) (0:(randomRs (0,1) rand))
--- 
--- -- given a biased hidden layer sample, generate a biased input layer sample
--- regenerate :: RandomGen r => r -> RBM -> [Double] -> [Double]
--- regenerate rand rb hidden = zipWith applyP (inputProbs rb hidden) (0:(randomRs (0,1) rand))
--- 
--- 
--- 
--- --sample is 0 if generated number gg is greater then probabiliy pp
--- --so the higher pp the more likely that it will generate a 1
--- applyP :: Double -> Double -> Double
--- applyP pp gg | pp < gg = 0
---              | otherwise = 1
--- 
--- -- row vec * col vec
--- -- or (m x 1) * (1 x c) matrix multiply 
--- vmult :: [Double] -> [Double] -> [Double]
--- vmult xxs yys = [ (xx*yy) | xx <- xxs, yy<-yys]
--- 
+-- update the rbm weights from each batch
+learn :: RandomGen r => r -> RBM -> [Array U DIM2 Double]-> RBM
+learn _ rb [] = rb
+learn rand rb iis = nrb `deepseq` learn r2 nrb (tail iis)
+   where
+      (r1,r2) = split rand
+      nrb = batch r1 rb (head iis)
+{-# INLINE learn #-}
+
+-- given a batch of unbiased inputs, update the rbm weights from the batch at once 
+batch :: RandomGen r => r -> RBM -> Array U DIM2 Double -> RBM
+batch rand rb inputs = rb { weights = uw }
+   where
+      uw = R.zipWith (+) (weights rb) wd
+      sh = R.extent $ weights rb
+      wd = weightUpdatesLoop rand rb inputs 0 (R.fromList sh [0..])
+{-# INLINE batch #-}
+
+-- given a batch of unbiased inputs, generate the the RBM weight updates for the batch
+weightUpdatesLoop :: RandomGen r => r -> RBM -> Array U DIM2 Double -> Int -> Array U DIM2 Double -> Array U DIM2 Double
+weightUpdatesLoop _ _ inputs rx wds = wds
+   | (row inputs) == rx = wds
+weightUpdatesLoop rand rb inputs rx pwds = weightUpdatesLoop r2 rb inputs (rx + 1) nwds
+   where
+      biased = slice inputs (Any :. rx :. All)  
+      nwds = pw `deepseq` R.zipWith (+) pwds wd
+      wd = weightUpdate r1 rb biased
+      (r1,r2) = split rand
+{-# INLINE weightUpdatesLoop #-}
+
+-- given an unbiased input, generate the the RBM weight updates
+weightUpdate :: RandomGen r => r -> RBM -> Array U DIM1 Double -> Array U DIM2 Double
+weightUpdate rand rb biased = R.zipWith (-) w1 w2
+   where
+      (r1,r2) = split rand
+      hiddens = generate r1 rb biased
+      newins = regenerate r2 rb hiddens
+      w1 = hiddens `tensor` biased
+      w2 = hiddens `tensor` newins 
+{-# INLINE weightUpdate #-}
+
+-- given a biased input (1:input), generate a biased hidden layer sample
+generate :: RandomGen r => r -> RBM -> Array U DIM1 Double -> Array U DIM1 Double
+generate rand rb biased = R.fromFunction (Z:. nh) $ genProbs (hiddenProbs rb inputs) rands
+   where
+      rands = R.randomishDoubleArray (Z :. nh)  (fst $ random rand)
+      nh = numHidden rb
+{-# INLINE generate #-}
+
+-- given a biased hidden layer sample, generate a biased input layer sample
+regenerate :: RandomGen r => r -> RBM -> [Double] -> [Double]
+regenerate rand rb hidden = R.fromFunction (Z :. ni) genProbs (inputProbs rb hidden) rands
+   where
+      rands = R.randomishDoubleArray (Z :. ni)  (fst $ random rand)
+      ni = numInputs rb
+{-# INLINE regenerate #-}
+
+--sample is 0 if generated number gg is greater then probabiliy pp
+--so the higher pp the more likely that it will generate a 1
+genProbs :: Array U DIM1 Double -> Array U DIM1 Double -> DIM1 -> Double
+genProbs probs rands sh =
+   | len sh == 0 = 1
+   | (probs `R.index` sh) > (rands `R.index` sh) = 1
+   | otherwise = 0
+{-# INLINE applyProb #-}
+
+
+-- row vec * col vec
+-- or (r x 1) * (1 x c) -> (r x c) matrix multiply 
+tensor :: Array U DIM1 Double > Array U DIM1 Double -> Array U DIM2 Double
+tensor a1 a2 = R.mmultS a1 a2
+   where
+      a1' = R.reshape (Z:. len a1 :. 1) a1
+      a2' = R.reshape (Z:. 1 :. len a2) a2
+
+{-# INLINE tensor #-}
+ 
 
 -- sigmoid function
-{-# INLINE sigmoid #-}
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
+{-# INLINE sigmoid #-}
 
 -- 
 -- -- tests
