@@ -14,7 +14,6 @@ import Test.QuickCheck(verboseCheckWithResult)
 import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
 --impl modules
-import Data.Array.Repa.Algorithms.Randomish(randomishDoubleArray)
 import Data.Array.Repa(Array
                       ,U
                       ,DIM2
@@ -25,9 +24,12 @@ import Data.Array.Repa(Array
                       ,All(All)
                       )
 import qualified Data.Array.Repa as R
+import qualified Data.Array.Repa.Algorithms.Randomish as R
+import qualified Data.Array.Repa.Algorithms.Matrix as R
 import System.Random(RandomGen
                     ,random
                     ,mkStdGen
+                    ,split
                     )
 
 import Control.Monad.Identity(runIdentity)
@@ -41,12 +43,13 @@ numHidden rb = (row $ R.extent $ weights rb)
 numInputs :: RBM -> Int
 numInputs rb = (col $ R.extent $ weights rb) 
 
--- :. is an infix constructor similar to : for lists
 row :: DIM2 -> Int
 row (Z :. r :. _) = r
+{-# INLINE row #-}
 
 col :: DIM2 -> Int
 col (Z :. _ :. c) = c
+{-# INLINE col #-}
 
 len :: DIM1 -> Int
 len (Z :. i ) = i
@@ -56,7 +59,7 @@ len (Z :. i ) = i
 rbm :: RandomGen r => r -> Int -> Int -> RBM
 rbm r ni nh = RBM nw
    where
-      nw = randomishDoubleArray (Z :. nh :. ni) 0 1 (fst $ random r)
+      nw = R.randomishDoubleArray (Z :. nh :. ni) 0 1 (fst $ random r)
 
 {-- 
  - given an rbm and a biased input array, generate the energy
@@ -137,7 +140,7 @@ computeInputProb wws hidden xi = sigmoid sm
 -- update the rbm weights from each batch
 learn :: RandomGen r => r -> RBM -> [Array U DIM2 Double]-> RBM
 learn _ rb [] = rb
-learn rand rb iis = nrb `deepseq` learn r2 nrb (tail iis)
+learn rand rb iis = learn r2 nrb (tail iis)
    where
       (r1,r2) = split rand
       nrb = batch r1 rb (head iis)
@@ -145,21 +148,21 @@ learn rand rb iis = nrb `deepseq` learn r2 nrb (tail iis)
 
 -- given a batch of unbiased inputs, update the rbm weights from the batch at once 
 batch :: RandomGen r => r -> RBM -> Array U DIM2 Double -> RBM
-batch rand rb inputs = rb { weights = uw }
+batch rand rb inputs = uw `R.deepSeqArray` rb { weights = uw }
    where
       uw = R.zipWith (+) (weights rb) wd
       sh = R.extent $ weights rb
-      wd = weightUpdatesLoop rand rb inputs 0 (R.fromList sh [0..])
+      wd = weightUpdatesLoop rand rb inputs 0 (R.fromListUnboxed sh [0..])
 {-# INLINE batch #-}
 
 -- given a batch of unbiased inputs, generate the the RBM weight updates for the batch
 weightUpdatesLoop :: RandomGen r => r -> RBM -> Array U DIM2 Double -> Int -> Array U DIM2 Double -> Array U DIM2 Double
-weightUpdatesLoop _ _ inputs rx wds = wds
+weightUpdatesLoop _ _ inputs rx wds
    | (row inputs) == rx = wds
 weightUpdatesLoop rand rb inputs rx pwds = weightUpdatesLoop r2 rb inputs (rx + 1) nwds
    where
-      biased = slice inputs (Any :. rx :. All)  
-      nwds = pw `deepseq` R.zipWith (+) pwds wd
+      biased = R.slice inputs (Any :. rx :. All)  
+      nwds = pwds `R.deepSeqArray` R.zipWith (+) pwds wd
       wd = weightUpdate r1 rb biased
       (r1,r2) = split rand
 {-# INLINE weightUpdatesLoop #-}
@@ -177,7 +180,7 @@ weightUpdate rand rb biased = R.zipWith (-) w1 w2
 
 -- given a biased input (1:input), generate a biased hidden layer sample
 generate :: RandomGen r => r -> RBM -> Array U DIM1 Double -> Array U DIM1 Double
-generate rand rb biased = R.fromFunction (Z:. nh) $ genProbs (hiddenProbs rb inputs) rands
+generate rand rb biased = R.fromFunction (Z:. nh) $ genProbs (hiddenProbs rb biased) rands
    where
       rands = R.randomishDoubleArray (Z :. nh)  (fst $ random rand)
       nh = numHidden rb
@@ -194,16 +197,16 @@ regenerate rand rb hidden = R.fromFunction (Z :. ni) genProbs (inputProbs rb hid
 --sample is 0 if generated number gg is greater then probabiliy pp
 --so the higher pp the more likely that it will generate a 1
 genProbs :: Array U DIM1 Double -> Array U DIM1 Double -> DIM1 -> Double
-genProbs probs rands sh =
+genProbs probs rands sh
    | len sh == 0 = 1
    | (probs `R.index` sh) > (rands `R.index` sh) = 1
    | otherwise = 0
-{-# INLINE applyProb #-}
+{-# INLINE genProbs #-}
 
 
 -- row vec * col vec
 -- or (r x 1) * (1 x c) -> (r x c) matrix multiply 
-tensor :: Array U DIM1 Double > Array U DIM1 Double -> Array U DIM2 Double
+tensor :: Array U DIM1 Double -> Array U DIM1 Double -> Array U DIM2 Double
 tensor a1 a2 = R.mmultS a1 a2
    where
       a1' = R.reshape (Z:. len a1 :. 1) a1
@@ -307,7 +310,7 @@ prop_energy :: Int -> Int -> Int -> Bool
 prop_energy gen ni nh = not $ isNaN ee
    where
       ee = energy rb input
-      input = randomishDoubleArray (Z :. (fi ni)) 0 1 gen
+      input = R.randomishDoubleArray (Z :. (fi ni)) 0 1 gen
       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
       fi ww = 1 + (fromIntegral ww)
 
@@ -332,7 +335,7 @@ perf = do
    let file = "dist/perf-RBM.html"
        cfg = defaultConfig { reportFile = Just file, timeLimit = 1.0 }
        sz = 4096
-       input = randomishDoubleArray (Z :. sz) 0 1 0
+       input = R.randomishDoubleArray (Z :. sz) 0 1 0
        rb = rbm (mkStdGen 0) sz sz
    defaultMainWith cfg [
          bgroup "energy" [ bench (show sz) $ whnf (energy rb) input
