@@ -1,5 +1,5 @@
 module RBM.Repa(rbm
-               --,learn
+               ,learn
                ,energy
                ,perf
                ,test
@@ -150,47 +150,49 @@ learn rand rb iis = learn r2 nrb (tail iis)
 batch :: RandomGen r => r -> RBM -> Array U DIM2 Double -> RBM
 batch rand rb inputs = uw `R.deepSeqArray` rb { weights = uw }
    where
-      uw = R.zipWith (+) (weights rb) wd
+      uw = R.computeUnboxedS $ R.zipWith (+) (weights rb) wd
       sh = R.extent $ weights rb
       wd = weightUpdatesLoop rand rb inputs 0 (R.fromListUnboxed sh [0..])
 {-# INLINE batch #-}
 
 -- given a batch of unbiased inputs, generate the the RBM weight updates for the batch
 weightUpdatesLoop :: RandomGen r => r -> RBM -> Array U DIM2 Double -> Int -> Array U DIM2 Double -> Array U DIM2 Double
-weightUpdatesLoop _ _ inputs rx wds
-   | (row inputs) == rx = wds
+weightUpdatesLoop _rand _rb inputs rx wds
+   | (row $ R.extent inputs) == rx = wds
 weightUpdatesLoop rand rb inputs rx pwds = weightUpdatesLoop r2 rb inputs (rx + 1) nwds
    where
-      biased = R.slice inputs (Any :. rx :. All)  
-      nwds = pwds `R.deepSeqArray` R.zipWith (+) pwds wd
+      biased = R.computeUnboxedS $ R.slice inputs (Any :. rx :. All)  
+      nwds = pwds `R.deepSeqArray` (R.computeUnboxedS $ R.zipWith (+) pwds wd)
       wd = weightUpdate r1 rb biased
       (r1,r2) = split rand
 {-# INLINE weightUpdatesLoop #-}
 
 -- given an unbiased input, generate the the RBM weight updates
 weightUpdate :: RandomGen r => r -> RBM -> Array U DIM1 Double -> Array U DIM2 Double
-weightUpdate rand rb biased = R.zipWith (-) w1 w2
+weightUpdate rand rb biased = R.computeUnboxedS $ R.zipWith (-) w1 w2
    where
       (r1,r2) = split rand
       hiddens = generate r1 rb biased
-      newins = regenerate r2 rb hiddens
+      newins = hiddens `R.deepSeqArray` regenerate r2 rb hiddens
       w1 = hiddens `tensor` biased
       w2 = hiddens `tensor` newins 
 {-# INLINE weightUpdate #-}
 
 -- given a biased input (1:input), generate a biased hidden layer sample
 generate :: RandomGen r => r -> RBM -> Array U DIM1 Double -> Array U DIM1 Double
-generate rand rb biased = R.fromFunction (Z:. nh) $ genProbs (hiddenProbs rb biased) rands
+generate rand rb biased = R.computeUnboxedS $ R.fromFunction (Z:. nh) gen
    where
-      rands = R.randomishDoubleArray (Z :. nh)  (fst $ random rand)
+      gen sh = genProbs (hiddenProbs rb biased) rands sh
+      rands = R.randomishDoubleArray (Z :. nh)  0 1 (fst $ random rand)
       nh = numHidden rb
 {-# INLINE generate #-}
 
 -- given a biased hidden layer sample, generate a biased input layer sample
-regenerate :: RandomGen r => r -> RBM -> [Double] -> [Double]
-regenerate rand rb hidden = R.fromFunction (Z :. ni) genProbs (inputProbs rb hidden) rands
+regenerate :: RandomGen r => r -> RBM -> Array U DIM1 Double -> Array U DIM1 Double
+regenerate rand rb hidden = R.computeUnboxedS $ R.fromFunction (Z :. ni) gen 
    where
-      rands = R.randomishDoubleArray (Z :. ni)  (fst $ random rand)
+      gen sh = genProbs (inputProbs rb hidden) rands sh
+      rands = R.randomishDoubleArray (Z :. ni) 0 1 (fst $ random rand)
       ni = numInputs rb
 {-# INLINE regenerate #-}
 
@@ -203,15 +205,15 @@ genProbs probs rands sh
    | otherwise = 0
 {-# INLINE genProbs #-}
 
-
 -- row vec * col vec
 -- or (r x 1) * (1 x c) -> (r x c) matrix multiply 
 tensor :: Array U DIM1 Double -> Array U DIM1 Double -> Array U DIM2 Double
-tensor a1 a2 = R.mmultS a1 a2
+tensor a1 a2 = R.mmultS a1' a2'
    where
-      a1' = R.reshape (Z:. len a1 :. 1) a1
-      a2' = R.reshape (Z:. 1 :. len a2) a2
-
+      a1' :: Array U DIM2 Double
+      a1' = R.computeUnboxedS $ R.reshape (Z :. len (R.extent a1) :. 1) a1
+      a2' :: Array U DIM2 Double
+      a2' = R.computeUnboxedS $ R.reshape (Z :. 1 :. len (R.extent a2)) a2
 {-# INLINE tensor #-}
  
 
