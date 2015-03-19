@@ -240,17 +240,17 @@ sigmoid d = 1 / (1 + (exp (negate d)))
 --       nh = fromIntegral nh' :: Int
 --       --creates a random number generator with a seed
 --       mr i = mkStdGen (ni + nh + i)
--- 
--- 
--- prop_learn :: Word8 -> Word8 -> Bool
--- prop_learn ni nh = ln == (length $ weights $ lrb)
---    where
---       ln = ((fi ni) + 1) * ((fi nh) + 1)
---       lrb = learn' rb 1
---       learn' rr ix = learn (mkStdGen ix) rr [[(take (fi ni) $ cycle [0,1])]]
---       rb = rbm (mkStdGen 0) (fi ni) (fi nh)
---       fi = fromIntegral
--- 
+
+
+--prop_learn :: Word8 -> Word8 -> Bool
+--prop_learn ni nh = ln == (length $ weights $ lrb)
+--   where
+--      ln = ((fi ni) + 1) * ((fi nh) + 1)
+--      lrb = learn' rb 1
+--      learn' rr ix = learn (mkStdGen ix) rr [[(take (fi ni) $ cycle [0,1])]]
+--      rb = rbm (mkStdGen 0) (fi ni) (fi nh)
+--      fi cc = 1 + (fromIntegral cc)
+
 -- prop_batch :: Word8 -> Word8 -> Word8 -> Bool
 -- prop_batch ix ni nh = ln == (length $ weights $ lrb)
 --    where
@@ -295,27 +295,29 @@ prop_hiddenProbs2 = pp == map sigmoid [h0, h1]
       wws = [w00,w01,w02,w10,w11,w12]
       input = R.fromListUnboxed (Z:.3) $ [i0,i1,i2]
       pp = R.toList $ hiddenProbs rb input
-      rb = RBM $ R.fromListUnboxed (Z:.3:.2) $ wws
--- 
--- prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
--- prop_inputProbs gen ni nh = (fi ni) + 1 == length pp
---    where
---       pp = inputProbs rb $ replicate ((fi nh) + 1) 0.0
---       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
---       fi = fromIntegral
--- 
--- prop_inputProbs2 :: Bool
--- prop_inputProbs2 = pp == map sigmoid [i0,i1,i2]
---    where
---       i0 = w00 * h0 + w10 * h1
---       i1 = w01 * h0 + w11 * h1
---       i2 = w02 * h0 + w12 * h1
---       h0:h1:_ = [1..]
---       w00:w01:w02:w10:w11:w12:_ = [1..]
---       wws = [w00,w01,w02,w10,w11,w12]
---       pp = inputProbs rb [h0,h1]
---       rb = RBM wws 2 1
--- 
+      rb = RBM $ R.fromListUnboxed (Z:.2:.3) $ wws
+
+prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
+prop_inputProbs gen ni nh = (fi ni) == (len $ R.extent pp)
+   where
+      pp = inputProbs rb hidden
+      hidden = R.randomishDoubleArray (Z :. (fi nh)) 0 1 gen
+      rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+      fi ww = 1 + (fromIntegral ww)
+
+prop_inputProbs2 :: Bool
+prop_inputProbs2 = pp == map sigmoid [i0,i1,i2]
+   where
+      i0 = w00 * h0 + w10 * h1
+      i1 = w01 * h0 + w11 * h1
+      i2 = w02 * h0 + w12 * h1
+      h0:h1:_ = [1..]
+      w00:w01:w02:w10:w11:w12:_ = [1..]
+      wws = [w00,w01,w02,w10,w11,w12]
+      hiddens = R.fromListUnboxed (Z:.2) [h0,h1]
+      pp = R.toList $ inputProbs rb hiddens
+      rb = RBM $ R.fromListUnboxed (Z:.2:.3) $ wws
+
 prop_energy :: Int -> Word8 -> Word8 -> Bool
 prop_energy gen ni nh = not $ isNaN ee
    where
@@ -334,8 +336,8 @@ test = do
    runtest "tensor"   prop_tensor
    runtest "hiddenp"  prop_hiddenProbs
    runtest "hiddenp2" prop_hiddenProbs2
-   --runtest "inputp"   prop_inputProbs
-   --runtest "inputp2"  prop_inputProbs2
+   runtest "inputp"   prop_inputProbs
+   runtest "inputp2"  prop_inputProbs2
    --runtest "learn"    prop_learn
    --runtest "batch"    prop_batch
    --runtest "learned"  prop_learned
