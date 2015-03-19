@@ -285,16 +285,17 @@ prop_hiddenProbs gen ni nh = (fi nh) == (len $ R.extent pp)
       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
       fi ww = 1 + (fromIntegral ww)
 
--- prop_hiddenProbs2 :: Bool
--- prop_hiddenProbs2 = pp == map sigmoid [h0, h1]
---    where
---       h0 = w00 * i0 + w01 * i1 + w02 * i2  
---       h1 = w10 * i0 + w11 * i1 + w12 * i2 
---       i0:i1:i2:_ = [1..]
---       w00:w01:w02:w10:w11:w12:_ = [1..]
---       wws = [w00,w01,w02,w10,w11,w12]
---       pp = hiddenProbs rb [i0,i1,i2]
---       rb = RBM wws 2 1
+prop_hiddenProbs2 :: Bool
+prop_hiddenProbs2 = pp == map sigmoid [h0, h1]
+   where
+      h0 = w00 * i0 + w01 * i1 + w02 * i2  
+      h1 = w10 * i0 + w11 * i1 + w12 * i2 
+      i0:i1:i2:_ = [1..]
+      w00:w01:w02:w10:w11:w12:_ = [1..]
+      wws = [w00,w01,w02,w10,w11,w12]
+      input = R.fromListUnboxed (Z:.3) $ [i0,i1,i2]
+      pp = R.toList $ hiddenProbs rb input
+      rb = RBM $ R.fromListUnboxed (Z:.3:.2) $ wws
 -- 
 -- prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
 -- prop_inputProbs gen ni nh = (fi ni) + 1 == length pp
@@ -332,7 +333,7 @@ test = do
    runtest "energy"   prop_energy
    runtest "tensor"   prop_tensor
    runtest "hiddenp"  prop_hiddenProbs
-   --runtest "hiddenp2" prop_hiddenProbs2
+   runtest "hiddenp2" prop_hiddenProbs2
    --runtest "inputp"   prop_inputProbs
    --runtest "inputp2"  prop_inputProbs2
    --runtest "learn"    prop_learn
