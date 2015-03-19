@@ -257,7 +257,7 @@ test = do
 
 perf :: IO ()
 perf = do
-   let file = "dist/perf-RBM.html"
+   let file = "dist/perf-list-RBM.html"
        cfg = defaultConfig { reportFile = Just file, timeLimit = 1.0 }
    defaultMainWith cfg [
        bgroup "energy" [ bench "3x3"  $ whnf (prop_energy 0 3) 3

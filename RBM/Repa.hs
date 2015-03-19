@@ -268,8 +268,14 @@ prop_init gen ni nh = (fi ni) * (fi nh)  == (length $ R.toList $ weights rb)
       fi :: Word8 -> Int
       fi ww = 1 + (fromIntegral ww)
 
--- prop_vmult :: Bool
--- prop_vmult = vmult [1,2,3] [4,5] == [1*4,1*5,2*4,2*5,3*4,3*5]
+prop_tensor :: Bool
+prop_tensor = rv == [1*4,1*5,2*4,2*5,3*4,3*5]
+   where
+      rv = R.toList (a1 `tensor` a2)
+      a1 :: Array U DIM1 Double
+      a1 = R.fromListUnboxed (Z:.3) [1,2,3]
+      a2 :: Array U DIM1 Double
+      a2 = R.fromListUnboxed (Z:.2) [4,5]
 -- 
 -- prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
 -- prop_hiddenProbs gen ni nh = (fi nh) + 1 == length pp
@@ -308,7 +314,7 @@ prop_init gen ni nh = (fi ni) * (fi nh)  == (length $ R.toList $ weights rb)
 --       pp = inputProbs rb [h0,h1]
 --       rb = RBM wws 2 1
 -- 
-prop_energy :: Int -> Int -> Int -> Bool
+prop_energy :: Int -> Word8 -> Word8 -> Bool
 prop_energy gen ni nh = not $ isNaN ee
    where
       ee = energy rb input
@@ -323,37 +329,35 @@ test = do
        runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
    runtest "init"     prop_init
    runtest "energy"   prop_energy
---    runtest "hiddenp"  prop_hiddenProbs
---    runtest "hiddenp2" prop_hiddenProbs2
---    runtest "inputp"   prop_inputProbs
---    runtest "inputp2"  prop_inputProbs2
---    runtest "vmult"    prop_vmult
---    runtest "learn"    prop_learn
---    runtest "batch"    prop_batch
---    runtest "learned"  prop_learned
+   runtest "tensor"   prop_tensor
+   --runtest "hiddenp"  prop_hiddenProbs
+   --runtest "hiddenp2" prop_hiddenProbs2
+   --runtest "inputp"   prop_inputProbs
+   --runtest "inputp2"  prop_inputProbs2
+   --runtest "learn"    prop_learn
+   --runtest "batch"    prop_batch
+   --runtest "learned"  prop_learned
 
 perf :: IO ()
 perf = do
-   let file = "dist/perf-RBM.html"
+   let file = "dist/perf-repa-RBM.html"
        cfg = defaultConfig { reportFile = Just file, timeLimit = 1.0 }
-       sz = 4096
-       input = R.randomishDoubleArray (Z :. sz) 0 1 0
-       rb = rbm (mkStdGen 0) sz sz
    defaultMainWith cfg [
-         bgroup "energy" [ bench (show sz) $ whnf (energy rb) input
-                         ]
+       bgroup "energy" [ bench "64x64"  $ whnf (prop_energy 0 64) 64
+                       , bench "128x128"  $ whnf (prop_energy 0 128) 128
+                       , bench "255x255"  $ whnf (prop_energy 0 255) 255
+                       ]
+   --   ,bgroup "hidden" [ bench "64x64"  $ whnf (prop_hiddenProbs 0 64) 64
+   --                    , bench "128x128"  $ whnf (prop_hiddenProbs 0 128) 128
+   --                    , bench "255x255"  $ whnf (prop_hiddenProbs 0 255) 255
+   --                    ]
+   --   ,bgroup "input" [ bench "64x64"  $ whnf (prop_inputProbs 0 64) 64
+   --                   , bench "128x128"  $ whnf (prop_inputProbs 0 128) 128
+   --                   , bench "255x255"  $ whnf (prop_inputProbs 0 255) 255
+   --                   ]
+   --   ,bgroup "batch" [ bench "64x64"  $ whnf (prop_batch 64 64) 64
+   --                   , bench "128x128"  $ whnf (prop_batch 128 128) 128
+   --                   , bench "255x255"  $ whnf (prop_batch 255 255) 255
+   --                   ]
       ]
---       ,bgroup "hidden" [ bench "3x3"  $ whnf (prop_hiddenProbs 0 3) 3
---                        , bench "63x63"  $ whnf (prop_hiddenProbs 0 63) 63
---                        , bench "127x127"  $ whnf (prop_hiddenProbs 0 127) 127
---                        ]
---       ,bgroup "input" [ bench "3x3"  $ whnf (prop_inputProbs 0 3) 3
---                       , bench "63x63"  $ whnf (prop_inputProbs 0 63) 63
---                       , bench "127x127"  $ whnf (prop_inputProbs 0 127) 127
---                       ]
---       ,bgroup "batch" [ bench "3"  $ whnf (prop_batch 3 63) 63
---                       , bench "63"  $ whnf (prop_batch 63 63) 63
---                       , bench "127"  $ whnf (prop_batch 127 63) 63
---                       ]
---       ]
---    putStrLn $ "perf log written to " ++ file
+   putStrLn $ "perf log written to " ++ file
