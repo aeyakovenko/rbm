@@ -30,6 +30,7 @@ main = do
       ,  bench "f2" $ nfIO $ f2
       ,  bench "f3" $ whnf f3 sh
       ]
+
 {--
 
 $ time ./dist/build/test/test +RTS -N4
