@@ -49,7 +49,7 @@ Benchmark perf-repa-RBM
 
 Benchmark proto
     type:            exitcode-stdio-1.0
-    ghc-options:     -Wall -threaded -O3 -main-is Proto.main
+    ghc-options:     -threaded -O3 -main-is Proto.main
     main-is:         RBM/Proto.hs
     Build-Depends:   base,
                      mtl,

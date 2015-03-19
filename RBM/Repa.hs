@@ -276,14 +276,15 @@ prop_tensor = rv == [1*4,1*5,2*4,2*5,3*4,3*5]
       a1 = R.fromListUnboxed (Z:.3) [1,2,3]
       a2 :: Array U DIM1 Double
       a2 = R.fromListUnboxed (Z:.2) [4,5]
--- 
--- prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
--- prop_hiddenProbs gen ni nh = (fi nh) + 1 == length pp
---    where
---       pp = hiddenProbs rb $ replicate ((fi ni) + 1) 0.0
---       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
---       fi = fromIntegral
--- 
+
+prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
+prop_hiddenProbs gen ni nh = (fi nh) == (len $ R.extent pp)
+   where
+      pp = hiddenProbs rb input
+      input = R.randomishDoubleArray (Z :. (fi ni)) 0 1 gen
+      rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+      fi ww = 1 + (fromIntegral ww)
+
 -- prop_hiddenProbs2 :: Bool
 -- prop_hiddenProbs2 = pp == map sigmoid [h0, h1]
 --    where
@@ -330,7 +331,7 @@ test = do
    runtest "init"     prop_init
    runtest "energy"   prop_energy
    runtest "tensor"   prop_tensor
-   --runtest "hiddenp"  prop_hiddenProbs
+   runtest "hiddenp"  prop_hiddenProbs
    --runtest "hiddenp2" prop_hiddenProbs2
    --runtest "inputp"   prop_inputProbs
    --runtest "inputp2"  prop_inputProbs2
