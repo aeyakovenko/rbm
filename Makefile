@@ -1,4 +1,4 @@
-hs_files=RBM/List.hs
+hs_files=RBM/List.hs RBM/Repa.hs RBM/Proto.hs
 cabal_files=rbm.cabal
 
 all:dist/cabal.test.ok dist/cabal.perf.ok dist/cabal.build.ok

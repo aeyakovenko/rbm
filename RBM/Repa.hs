@@ -28,20 +28,26 @@ import qualified Data.Array.Repa.Algorithms.Randomish as R
 import qualified Data.Array.Repa.Algorithms.Matrix as R
 import System.Random(RandomGen
                     ,random
+                    ,randomRs
                     ,mkStdGen
                     ,split
                     )
 
 import Control.Monad.Identity(runIdentity)
 
-data RBM = RBM { weights :: Array U DIM2 Double -- weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
-               }
+type RBM = Array U DIM2 Double -- weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
+
+weights :: RBM -> Array U DIM2 Double
+weights = id
+{-# INLINE weights #-}
 
 numHidden :: RBM -> Int
 numHidden rb = (row $ R.extent $ weights rb) 
+{-# INLINE numHidden #-}
 
 numInputs :: RBM -> Int
 numInputs rb = (col $ R.extent $ weights rb) 
+{-# INLINE numInputs #-}
 
 row :: DIM2 -> Int
 row (Z :. r :. _) = r
@@ -57,7 +63,7 @@ len (Z :. i ) = i
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
-rbm r ni nh = RBM nw
+rbm r ni nh = nw
    where
       nw = R.randomishDoubleArray (Z :. nh :. ni) 0 1 (fst $ random r)
 
@@ -140,7 +146,7 @@ computeInputProb wws hidden xi = sigmoid sm
 -- update the rbm weights from each batch
 learn :: RandomGen r => r -> RBM -> [Array U DIM2 Double]-> RBM
 learn _ rb [] = rb
-learn rand rb iis = learn r2 nrb (tail iis)
+learn rand rb iis = rb `R.deepSeqArray` learn r2 nrb (tail iis)
    where
       (r1,r2) = split rand
       nrb = batch r1 rb (head iis)
@@ -148,21 +154,21 @@ learn rand rb iis = learn r2 nrb (tail iis)
 
 -- given a batch of unbiased inputs, update the rbm weights from the batch at once 
 batch :: RandomGen r => r -> RBM -> Array U DIM2 Double -> RBM
-batch rand rb inputs = uw `R.deepSeqArray` rb { weights = uw }
+batch rand rb inputs = uw
    where
       uw = R.computeUnboxedS $ R.zipWith (+) (weights rb) wd
       sh = R.extent $ weights rb
-      wd = weightUpdatesLoop rand rb inputs 0 (R.fromListUnboxed sh [0..])
+      wd = weightUpdatesLoop rand rb inputs 0 $ R.fromListUnboxed sh $ take (row sh * col sh) [0..]
 {-# INLINE batch #-}
 
 -- given a batch of unbiased inputs, generate the the RBM weight updates for the batch
 weightUpdatesLoop :: RandomGen r => r -> RBM -> Array U DIM2 Double -> Int -> Array U DIM2 Double -> Array U DIM2 Double
 weightUpdatesLoop _rand _rb inputs rx wds
-   | (row $ R.extent inputs) == rx = wds
-weightUpdatesLoop rand rb inputs rx pwds = weightUpdatesLoop r2 rb inputs (rx + 1) nwds
+   | (row $ R.extent inputs) <= rx = wds
+weightUpdatesLoop rand rb inputs rx pwds = pwds `R.deepSeqArray` (weightUpdatesLoop r2 rb inputs (rx + 1) nwds)
    where
       biased = R.computeUnboxedS $ R.slice inputs (Any :. rx :. All)  
-      nwds = pwds `R.deepSeqArray` (R.computeUnboxedS $ R.zipWith (+) pwds wd)
+      nwds = R.computeUnboxedS $ R.zipWith (+) pwds wd
       wd = weightUpdate r1 rb biased
       (r1,r2) = split rand
 {-# INLINE weightUpdatesLoop #-}
@@ -222,44 +228,45 @@ sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 {-# INLINE sigmoid #-}
 
--- 
--- -- tests
--- 
--- -- test to see if we can learn a random string
--- prop_learned :: Word8 -> Word8 -> Bool
--- prop_learned ni' nh' = (tail regened) == input
---    where
---       regened = regenerate (mr 2) lrb $ generate (mr 3) lrb (1:input)
---       --learn the inputs
---       lrb = learn (mr 1) rb [inputs]
---       rb = rbm (mr 0) ni nh
---       inputs = replicate 2000 $ input
---       --convert a random list of its 0 to 1 to doubles
---       input = map fromIntegral $ take ni $ randomRs (0::Int,1::Int) (mr 4)
---       ni = fromIntegral ni' :: Int
---       nh = fromIntegral nh' :: Int
---       --creates a random number generator with a seed
---       mr i = mkStdGen (ni + nh + i)
+
+-- tests
+
+-- test to see if we can learn a random string
+prop_learned :: Word8 -> Word8 -> Bool
+prop_learned ni nh = (tail $ R.toList regened) == (tail $ R.toList inputarr)
+   where
+      regened = regenerate (mr 2) lrb $ generate (mr 3) lrb inputarr
+      --learn the inputs
+
+      lrb = learn (mr 1) rb [inputbatch]
+      --creates a random number generator with a seed
+
+      rb = rbm (mr 0) (fi ni) (fi nh)
+      inputbatch = R.fromListUnboxed (Z:. batchsz :.fi ni) $ concat $ replicate batchsz inputlst
+      inputarr = R.fromListUnboxed (Z:. fi ni) $ inputlst
+      inputlst = take (fi ni) $ map fromIntegral $ randomRs (0::Int,1::Int) (mr 4)
+      fi ww = 1 + (fromIntegral ww)
+      mr i = mkStdGen (fi ni + fi nh + i)
+      batchsz = 2000
 
 
---prop_learn :: Word8 -> Word8 -> Bool
---prop_learn ni nh = ln == (length $ weights $ lrb)
---   where
---      ln = ((fi ni) + 1) * ((fi nh) + 1)
---      lrb = learn' rb 1
---      learn' rr ix = learn (mkStdGen ix) rr [[(take (fi ni) $ cycle [0,1])]]
---      rb = rbm (mkStdGen 0) (fi ni) (fi nh)
---      fi cc = 1 + (fromIntegral cc)
+prop_learn :: Word8 -> Word8 -> Bool
+prop_learn ni nh = (R.extent $ weights rb) == (R.extent $ weights $ lrb)
+   where
+      lrb = learn rand rb [inputs]
+      inputs = R.fromListUnboxed (Z:.fi nh:.fi ni) $ take ((fi ni) * (fi nh)) $ cycle [0,1]
+      rand = mkStdGen $ fi nh
+      rb = rbm rand (fi ni) (fi nh)
+      fi ww = 1 + (fromIntegral ww)
 
--- prop_batch :: Word8 -> Word8 -> Word8 -> Bool
--- prop_batch ix ni nh = ln == (length $ weights $ lrb)
---    where
---       ln = ((fi ni) + 1) * ((fi nh) + 1)
---       lrb = batch rand rb inputs
---       rb = rbm rand (fi ni) (fi nh)
---       rand = mkStdGen ln
---       inputs = replicate (fi ix) $ take (fi ni) $ cycle [0,1]
---       fi = fromIntegral
+prop_batch :: Word8 -> Word8 -> Word8 -> Bool
+prop_batch ix ni nh = (R.extent $ weights rb) == (R.extent $ weights $ lrb)
+   where
+      lrb = batch rand rb inputs
+      rb = rbm rand (fi ni) (fi nh)
+      rand = mkStdGen $ fi ix
+      inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
+      fi ww = 1 + (fromIntegral ww)
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
 prop_init gen ni nh = (fi ni) * (fi nh)  == (length $ R.toList $ weights rb)
@@ -295,7 +302,7 @@ prop_hiddenProbs2 = pp == map sigmoid [h0, h1]
       wws = [w00,w01,w02,w10,w11,w12]
       input = R.fromListUnboxed (Z:.3) $ [i0,i1,i2]
       pp = R.toList $ hiddenProbs rb input
-      rb = RBM $ R.fromListUnboxed (Z:.2:.3) $ wws
+      rb = R.fromListUnboxed (Z:.2:.3) $ wws
 
 prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
 prop_inputProbs gen ni nh = (fi ni) == (len $ R.extent pp)
@@ -316,7 +323,7 @@ prop_inputProbs2 = pp == map sigmoid [i0,i1,i2]
       wws = [w00,w01,w02,w10,w11,w12]
       hiddens = R.fromListUnboxed (Z:.2) [h0,h1]
       pp = R.toList $ inputProbs rb hiddens
-      rb = RBM $ R.fromListUnboxed (Z:.2:.3) $ wws
+      rb = R.fromListUnboxed (Z:.2:.3) $ wws
 
 prop_energy :: Int -> Word8 -> Word8 -> Bool
 prop_energy gen ni nh = not $ isNaN ee
@@ -338,9 +345,9 @@ test = do
    runtest "hiddenp2" prop_hiddenProbs2
    runtest "inputp"   prop_inputProbs
    runtest "inputp2"  prop_inputProbs2
-   --runtest "learn"    prop_learn
-   --runtest "batch"    prop_batch
-   --runtest "learned"  prop_learned
+   runtest "batch"    prop_batch
+   runtest "learn"    prop_learn
+   runtest "learned"  prop_learned
 
 perf :: IO ()
 perf = do
@@ -351,17 +358,17 @@ perf = do
                        , bench "128x128"  $ whnf (prop_energy 0 128) 128
                        , bench "255x255"  $ whnf (prop_energy 0 255) 255
                        ]
-   --   ,bgroup "hidden" [ bench "64x64"  $ whnf (prop_hiddenProbs 0 64) 64
-   --                    , bench "128x128"  $ whnf (prop_hiddenProbs 0 128) 128
-   --                    , bench "255x255"  $ whnf (prop_hiddenProbs 0 255) 255
-   --                    ]
-   --   ,bgroup "input" [ bench "64x64"  $ whnf (prop_inputProbs 0 64) 64
-   --                   , bench "128x128"  $ whnf (prop_inputProbs 0 128) 128
-   --                   , bench "255x255"  $ whnf (prop_inputProbs 0 255) 255
-   --                   ]
-   --   ,bgroup "batch" [ bench "64x64"  $ whnf (prop_batch 64 64) 64
-   --                   , bench "128x128"  $ whnf (prop_batch 128 128) 128
-   --                   , bench "255x255"  $ whnf (prop_batch 255 255) 255
-   --                   ]
+      ,bgroup "hidden" [ bench "64x64"  $ whnf (prop_hiddenProbs 0 64) 64
+                       , bench "128x128"  $ whnf (prop_hiddenProbs 0 128) 128
+                       , bench "255x255"  $ whnf (prop_hiddenProbs 0 255) 255
+                       ]
+      ,bgroup "input" [ bench "64x64"  $ whnf (prop_inputProbs 0 64) 64
+                      , bench "128x128"  $ whnf (prop_inputProbs 0 128) 128
+                      , bench "255x255"  $ whnf (prop_inputProbs 0 255) 255
+                      ]
+      ,bgroup "batch" [ bench "64x64"  $ whnf (prop_batch 64 64) 64
+                      , bench "128x128"  $ whnf (prop_batch 128 128) 128
+                      , bench "255x255"  $ whnf (prop_batch 255 255) 255
+                      ]
       ]
    putStrLn $ "perf log written to " ++ file

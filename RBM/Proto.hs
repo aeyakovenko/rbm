@@ -11,7 +11,7 @@ main = do
    let
       f (Z :. r :. c) = (fromIntegral r) * (fromIntegral c)
       sh :: DIM2
-      sh = Z :. 10000 :. 10000
+      sh = Z :. 1000 :. 1000
       f1 :: IO Double
       f1 = do
          a <- computeUnboxedP (fromFunction sh f)
