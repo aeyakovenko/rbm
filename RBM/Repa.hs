@@ -354,20 +354,20 @@ perf = do
    let file = "dist/perf-repa-RBM.html"
        cfg = defaultConfig { reportFile = Just file, timeLimit = 1.0 }
    defaultMainWith cfg [
-       bgroup "energy" [ bench "64x64"  $ whnf (prop_energy 0 64) 64
-                       , bench "128x128"  $ whnf (prop_energy 0 128) 128
+       bgroup "energy" [ bench "63x63"  $ whnf (prop_energy 0 63) 63
+                       , bench "127x127"  $ whnf (prop_energy 0 127) 127
                        , bench "255x255"  $ whnf (prop_energy 0 255) 255
                        ]
-      ,bgroup "hidden" [ bench "64x64"  $ whnf (prop_hiddenProbs 0 64) 64
-                       , bench "128x128"  $ whnf (prop_hiddenProbs 0 128) 128
+      ,bgroup "hidden" [ bench "63x63"  $ whnf (prop_hiddenProbs 0 63) 63
+                       , bench "127x127"  $ whnf (prop_hiddenProbs 0 127) 127
                        , bench "255x255"  $ whnf (prop_hiddenProbs 0 255) 255
                        ]
-      ,bgroup "input" [ bench "64x64"  $ whnf (prop_inputProbs 0 64) 64
-                      , bench "128x128"  $ whnf (prop_inputProbs 0 128) 128
+      ,bgroup "input" [ bench "63x63"  $ whnf (prop_inputProbs 0 63) 63
+                      , bench "127x127"  $ whnf (prop_inputProbs 0 127) 127
                       , bench "255x255"  $ whnf (prop_inputProbs 0 255) 255
                       ]
-      ,bgroup "batch" [ bench "64x64"  $ whnf (prop_batch 64 64) 64
-                      , bench "128x128"  $ whnf (prop_batch 128 128) 128
+      ,bgroup "batch" [ bench "63x63"  $ whnf (prop_batch 63 63) 63
+                      , bench "127x127"  $ whnf (prop_batch 127 127) 127
                       , bench "255x255"  $ whnf (prop_batch 255 255) 255
                       ]
       ]

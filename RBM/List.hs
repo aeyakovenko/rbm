@@ -272,9 +272,9 @@ perf = do
                       , bench "63x63"  $ whnf (prop_inputProbs 0 63) 63
                       , bench "127x127"  $ whnf (prop_inputProbs 0 127) 127
                       ]
-      ,bgroup "batch" [ bench "3"  $ whnf (prop_batch 3 63) 63
+      ,bgroup "batch" [ bench "3"  $ whnf (prop_batch 3 3) 3
+                      , bench "15"  $ whnf (prop_batch 15 15) 15
                       , bench "63"  $ whnf (prop_batch 63 63) 63
-                      , bench "127"  $ whnf (prop_batch 127 63) 63
                       ]
       ]
    putStrLn $ "perf log written to " ++ file
