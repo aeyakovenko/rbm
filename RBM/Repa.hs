@@ -366,7 +366,8 @@ perf = do
                       , bench "127x127"  $ whnf (prop_inputProbs 0 127) 127
                       , bench "255x255"  $ whnf (prop_inputProbs 0 255) 255
                       ]
-      ,bgroup "batch" [ bench "63x63"  $ whnf (prop_batch 63 63) 63
+      ,bgroup "batch" [ bench "15"  $ whnf (prop_batch 15 15) 15
+                      , bench "63x63"  $ whnf (prop_batch 63 63) 63
                       , bench "127x127"  $ whnf (prop_batch 127 127) 127
                       , bench "255x255"  $ whnf (prop_batch 255 255) 255
                       ]
