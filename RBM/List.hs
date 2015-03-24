@@ -80,8 +80,8 @@ weightUpdate rand rb inputs = zipWith (-) w1 w2
       (r1,r2) = split rand
       hiddens = generate r1 rb (1:inputs)
       newins = regenerate r2 rb hiddens
-      w1 = vmult hiddens (1:inputs)
-      w2 = vmult hiddens newins 
+      w1 = tensor hiddens (1:inputs)
+      w2 = tensor hiddens newins 
 
 -- given a biased input (1:input), generate a biased hidden layer sample
 generate :: RandomGen r => r -> RBM -> [Double] -> [Double]
@@ -141,8 +141,8 @@ applyP pp gg | pp < gg = 0
 
 -- row vec * col vec
 -- or (m x 1) * (1 x c) matrix multiply 
-vmult :: [Double] -> [Double] -> [Double]
-vmult xxs yys = [ (xx*yy) | xx <- xxs, yy<-yys]
+tensor :: [Double] -> [Double] -> [Double]
+tensor xxs yys = [ (xx*yy) | xx <- xxs, yy<-yys]
 
 -- sigmoid function
 sigmoid :: Double -> Double
@@ -192,8 +192,8 @@ prop_init gen ni nh = ((fi ni) + 1) * ((fi nh) + 1) == (length $ weights rb)
       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
       fi = fromIntegral
 
-prop_vmult :: Bool
-prop_vmult = vmult [1,2,3] [4,5] == [1*4,1*5,2*4,2*5,3*4,3*5]
+prop_tensor :: Bool
+prop_tensor = tensor [1,2,3] [4,5] == [1*4,1*5,2*4,2*5,3*4,3*5]
 
 prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
 prop_hiddenProbs gen ni nh = (fi nh) + 1 == length pp
@@ -250,7 +250,7 @@ test = do
    runtest "hiddenp2" prop_hiddenProbs2
    runtest "inputp"   prop_inputProbs
    runtest "inputp2"  prop_inputProbs2
-   runtest "vmult"    prop_vmult
+   runtest "tensor"   prop_tensor
    runtest "learn"    prop_learn
    runtest "batch"    prop_batch
    runtest "learned"  prop_learned
