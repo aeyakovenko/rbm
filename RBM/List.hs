@@ -24,7 +24,7 @@ import System.Random(RandomGen
                     ,mkStdGen
                     )
 
-data RBM = RBM { weights :: [Double] -- weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
+data RBM = RBM { weights :: [Double] -- weight matrix with 1 bias nodes in each layer, numHidden  x numInputs, which include the bias nodes
                , numInputs :: Int    -- size without bias node
                , numHidden :: Int    -- size without bias node
                }
@@ -35,15 +35,17 @@ instance NFData RBM where
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
+rbm _ ni nh
+   | ni == 0 || nh == 0 = error "invalid number of nodes, must be at least 1"
 rbm r ni nh = RBM nw ni nh
    where
-      nw = take ((nh + 1)* (ni + 1)) $ randomRs (0,1) r
+      nw = take (nh * ni) $ randomRs (0,1) r
 
 -- given an rbm and an input, generate the energy
 energy :: RBM -> [Double] -> Double
 energy rb inputs = negate ee
    where
-      biased = 1:inputs
+      biased = inputs
       hhs = hiddenProbs rb biased
       wws = weights rb
       ee = hhs `deepseq` sum $ zipWith (*) wws [inp * hid | inp <- biased , hid <- hhs]
@@ -56,15 +58,15 @@ learn rand rb iis = nrb `deepseq` learn r2 nrb (tail iis)
       (r1,r2) = split rand
       nrb = batch r1 rb (head iis)
 
--- given a batch of unbiased inputs, update the rbm weights from the batch at once 
+-- given a batch of biased inputs, update the rbm weights from the batch at once 
 batch :: RandomGen r => r -> RBM -> [[Double]] -> RBM
 batch rand rb inputs = rb { weights = uw }
    where
       uw = zipWith (+) (weights rb) wd
       wd = weightUpdatesLoop rand rb inputs (take len [0..])
-      len = ((numInputs rb) + 1) * ((numHidden rb) + 1)
+      len = (numInputs rb) * (numHidden rb)
 
--- given a batch of unbiased inputs, generate the the RBM weight updates for the batch
+-- given a batch of biased inputs, generate the the RBM weight updates for the batch
 weightUpdatesLoop :: RandomGen r => r -> RBM -> [[Double]] -> [Double] -> [Double]
 weightUpdatesLoop _ _ [] pw = pw
 weightUpdatesLoop rand rb (inputs:rest) pw = weightUpdatesLoop r2 rb rest npw
@@ -73,17 +75,17 @@ weightUpdatesLoop rand rb (inputs:rest) pw = weightUpdatesLoop r2 rb rest npw
       wd = weightUpdate r1 rb inputs
       (r1,r2) = split rand
 
--- given an unbiased input, generate the the RBM weight updates
+-- given an biased input, generate the the RBM weight updates
 weightUpdate :: RandomGen r => r -> RBM -> [Double] -> [Double]
 weightUpdate rand rb inputs = zipWith (-) w1 w2
    where
       (r1,r2) = split rand
-      hiddens = generate r1 rb (1:inputs)
+      hiddens = generate r1 rb (inputs)
       newins = regenerate r2 rb hiddens
-      w1 = tensor hiddens (1:inputs)
+      w1 = tensor hiddens inputs
       w2 = tensor hiddens newins 
 
--- given a biased input (1:input), generate a biased hidden layer sample
+-- given a biased input generate a biased hidden layer sample
 generate :: RandomGen r => r -> RBM -> [Double] -> [Double]
 generate rand rb inputs = zipWith applyP (hiddenProbs rb inputs) (0:(randomRs (0,1) rand))
 
@@ -107,7 +109,7 @@ hiddenProbs :: RBM -> [Double] -> [Double]
 hiddenProbs rb biased = map (sigmoid . sum) $ chunksOf ni $ zipWith (*) wws $ cycle biased
    where
       wws = weights rb
-      ni = (numInputs rb) + 1
+      ni = (numInputs rb)
 
 {--
  - given a biased hidden sample generate probabilities of the input layer
@@ -131,7 +133,7 @@ inputProbs rb hidden = map (sigmoid . sum) $ transpose $ chunksOf ni $ zipWith (
    where
       hhs = concat $ transpose $ replicate ni hidden
       wws = weights rb
-      ni = (numInputs rb) + 1
+      ni = (numInputs rb)
 
 --sample is 0 if generated number gg is greater then probabiliy pp
 --so the higher pp the more likely that it will generate a 1
@@ -152,55 +154,55 @@ sigmoid d = 1 / (1 + (exp (negate d)))
 
 -- test to see if we can learn a random string
 prop_learned :: Word8 -> Word8 -> Bool
-prop_learned ni' nh' = (tail regened) == input
+prop_learned ni' nh' = (tail regened) == (tail input)
    where
-      regened = regenerate (mr 2) lrb $ generate (mr 3) lrb (1:input)
+      regened = regenerate (mr 2) lrb $ generate (mr 3) lrb input
       --learn the inputs
       lrb = learn (mr 1) rb [inputs]
       rb = rbm (mr 0) ni nh
       inputs = replicate 2000 $ input
       --convert a random list of its 0 to 1 to doubles
-      input = map fromIntegral $ take ni $ randomRs (0::Int,1::Int) (mr 4)
-      ni = fromIntegral ni' :: Int
-      nh = fromIntegral nh' :: Int
+      input = map fromIntegral $ take ni $ 1:(randomRs (0::Int,1::Int) (mr 4))
+      ni = fi ni'
+      nh = fi nh'
       --creates a random number generator with a seed
       mr i = mkStdGen (ni + nh + i)
-
+      fi ii = 1 + (fromIntegral ii)
 
 prop_learn :: Word8 -> Word8 -> Bool
 prop_learn ni nh = ln == (length $ weights $ lrb)
    where
-      ln = ((fi ni) + 1) * ((fi nh) + 1)
+      ln = (fi ni) * (fi nh)
       lrb = learn' rb 1
       learn' rr ix = learn (mkStdGen ix) rr [[(take (fi ni) $ cycle [0,1])]]
       rb = rbm (mkStdGen 0) (fi ni) (fi nh)
-      fi = fromIntegral
+      fi ii = 1 + fromIntegral ii
 
 prop_batch :: Word8 -> Word8 -> Word8 -> Bool
 prop_batch ix ni nh = ln == (length $ weights $ lrb)
    where
-      ln = ((fi ni) + 1) * ((fi nh) + 1)
+      ln = (fi ni) * (fi nh)
       lrb = batch rand rb inputs
       rb = rbm rand (fi ni) (fi nh)
       rand = mkStdGen ln
       inputs = replicate (fi ix) $ take (fi ni) $ cycle [0,1]
-      fi = fromIntegral
+      fi ii = 1 + (fromIntegral ii)
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
-prop_init gen ni nh = ((fi ni) + 1) * ((fi nh) + 1) == (length $ weights rb)
+prop_init gen ni nh = (fi ni) * (fi nh) == (length $ weights rb)
    where
       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
-      fi = fromIntegral
+      fi ii = 1 + (fromIntegral ii)
 
 prop_tensor :: Bool
 prop_tensor = tensor [1,2,3] [4,5] == [1*4,1*5,2*4,2*5,3*4,3*5]
 
 prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
-prop_hiddenProbs gen ni nh = (fi nh) + 1 == length pp
+prop_hiddenProbs gen ni nh = (fi nh) == length pp
    where
-      pp = hiddenProbs rb $ replicate ((fi ni) + 1) 0.0
+      pp = hiddenProbs rb $ replicate (fi ni) 0.0
       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
-      fi = fromIntegral
+      fi ii = 1 + (fromIntegral ii)
 
 prop_hiddenProbs2 :: Bool
 prop_hiddenProbs2 = pp == map sigmoid [h0, h1]
@@ -211,14 +213,14 @@ prop_hiddenProbs2 = pp == map sigmoid [h0, h1]
       w00:w01:w02:w10:w11:w12:_ = [1..]
       wws = [w00,w01,w02,w10,w11,w12]
       pp = hiddenProbs rb [i0,i1,i2]
-      rb = RBM wws 2 1
+      rb = RBM wws 3 2
 
 prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
-prop_inputProbs gen ni nh = (fi ni) + 1 == length pp
+prop_inputProbs gen ni nh = (fi ni) == length pp
    where
-      pp = inputProbs rb $ replicate ((fi nh) + 1) 0.0
+      pp = inputProbs rb $ replicate (fi nh) 0.0
       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
-      fi = fromIntegral
+      fi ii = 1 + (fromIntegral ii)
 
 prop_inputProbs2 :: Bool
 prop_inputProbs2 = pp == map sigmoid [i0,i1,i2]
@@ -230,14 +232,14 @@ prop_inputProbs2 = pp == map sigmoid [i0,i1,i2]
       w00:w01:w02:w10:w11:w12:_ = [1..]
       wws = [w00,w01,w02,w10,w11,w12]
       pp = inputProbs rb [h0,h1]
-      rb = RBM wws 2 1
+      rb = RBM wws 3 2
 
 prop_energy :: Int -> Word8 -> Word8 -> Bool
 prop_energy gen ni nh = not $ isNaN ee
    where
-      ee = energy rb $ replicate (fi ni) 0.0
+      ee = energy rb $ take (fi ni) $ 1:(repeat 0.0)
       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
-      fi = fromIntegral
+      fi ii = 1 + (fromIntegral ii)
 
 test :: IO ()
 test = do

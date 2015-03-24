@@ -22,6 +22,7 @@ Test-Suite test-list-RBM
     main-is:         RBM/List.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.test
 
+
 Test-Suite perf-list-cov-RBM
     type:            exitcode-stdio-1.0
     main-is:         RBM/List.hs
@@ -56,5 +57,4 @@ Benchmark proto
                      repa,
                      repa-algorithms,
                      criterion
-
 
