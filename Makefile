@@ -1,12 +1,7 @@
 hs_files=RBM/List.hs RBM/Repa.hs RBM/Proto.hs
 cabal_files=rbm.cabal
 
-all:dist/cabal.test.ok dist/cabal.perf.ok dist/cabal.build.ok
-
-dist/cabal.perf.ok:$(hs_files) dist/setup-config
-	cabal bench 2>&1
-	rm -f *.tix
-	@touch $@
+all:dist/cabal.test.ok dist/cabal.build.ok
 
 dist/cabal.test.ok:$(hs_files) dist/setup-config
 	cabal test 2>&1
@@ -22,7 +17,7 @@ clean:
 
 dist/setup-config:$(cabal_files) Makefile
 	cabal install --only-dependencies
-	cabal configure --enable-coverage --enable-tests --enable-benchmarks
+	cabal configure --enable-coverage --enable-tests
 	@touch $@
 
 $$%:;@$(call true)$(info $(call or,$$$*))

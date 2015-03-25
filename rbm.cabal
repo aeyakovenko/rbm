@@ -23,12 +23,7 @@ Test-Suite test-list-RBM
     ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.test
 
 
-Test-Suite perf-list-cov-RBM
-    type:            exitcode-stdio-1.0
-    main-is:         RBM/List.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.perf
-
-Benchmark perf-list-RBM
+Test-Suite perf-list-RBM
     type:            exitcode-stdio-1.0
     main-is:         RBM/List.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.perf
@@ -38,23 +33,13 @@ Test-Suite test-repa-RBM
     main-is:         RBM/Repa.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.Repa.test
 
-Test-Suite perf-repa-cov-RBM
+Test-Suite perf-repa-RBM
     type:            exitcode-stdio-1.0
     main-is:         RBM/Repa.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.Repa.perf
 
-Benchmark perf-repa-RBM
-    type:            exitcode-stdio-1.0
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.Repa.perf
-    main-is:         RBM/Repa.hs
-
-Benchmark proto
+Test-Suite proto
     type:            exitcode-stdio-1.0
     ghc-options:     -threaded -O3 -main-is RBM.Proto.main
     main-is:         RBM/Proto.hs
-    Build-Depends:   base,
-                     mtl,
-                     repa,
-                     repa-algorithms,
-                     criterion
 
