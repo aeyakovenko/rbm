@@ -20,4 +20,7 @@ dist/setup-config:$(cabal_files) Makefile
 	cabal configure --enable-coverage --enable-tests
 	@touch $@
 
+mnist.pkl.gz:
+	wget http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz
+
 $$%:;@$(call true)$(info $(call or,$$$*))
