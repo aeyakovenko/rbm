@@ -40,7 +40,7 @@ import Control.Monad.Identity(runIdentity)
 {--
  - weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
  --}
-type RBM = HxI
+type RBM = HxI U
 
 {--
  - data types to keep track of matrix orientation
@@ -49,16 +49,16 @@ type RBM = HxI
  - I num input nodes
  - B batch size
  --}
-data HxI = HxI { unHxI :: (Array U DIM2 Double)}
-data IxH = IxH { unIxH :: (Array U DIM2 Double)}
+data HxI a = HxI { unHxI :: (Array a DIM2 Double)}
+data IxH a = IxH { unIxH :: (Array a DIM2 Double)}
 
-data IxB = IxB { unIxB :: (Array U DIM2 Double)}
-data BxI = BxI { unBxI :: (Array U DIM2 Double)}
+data IxB a = IxB { unIxB :: (Array a DIM2 Double)}
+data BxI a = BxI { unBxI :: (Array a DIM2 Double)}
 
-data HxB = HxB { unHxB :: (Array U DIM2 Double)}
-data BxH = BxH { unBxH :: (Array U DIM2 Double)}
+data HxB a = HxB { unHxB :: (Array a DIM2 Double)}
+data BxH a = BxH { unBxH :: (Array a DIM2 Double)}
 
-weights :: RBM -> HxI
+weights :: RBM -> HxI U
 weights wws = wws
 {-# INLINE weights #-}
 
@@ -93,12 +93,14 @@ rbm r ni nh = HxI nw
  - should be: negate $ sumAll $ weights *^ (hidden `tensor` biased)
  - but everything is unrolled to experiment with Repa's parallelization
  --}
-energy :: RBM -> BxI -> Double
-energy rb biased = negate ee
+energy :: RBM -> Array U DIM1 Double -> Double
+energy rb inputs = negate ee
    where
-      ee = R.sumAllS $ (unHxI wws) *^ ((unHxB hhs) `R.mmultS` (unBxI biased))
+      ee = R.sumAllS $ (unHxI wws) *^ ((unHxB hhs) `R.mmultS` (unBxI bxi))
+      bxi = BxI $ R.reshape (Z :. 1 :. (len inputs)) inputs
+      ixb = IxB $ R.reshape (Z :. (len inputs) :. 1 ) inputs
       wws = weights rb
-      hhs = hiddenProbs rb biased
+      hhs = hiddenProbs rb ixb
 
 {--
  - given a biased input generate probabilities of the hidden layer
@@ -107,8 +109,8 @@ energy rb biased = negate ee
  - map sigmoid $ biased `mmult` weights
  -
  --}
-hiddenProbs :: HxI -> IxB -> HxB
-hiddenProbs (HxI wws) (IxB iis) = R.computeUnboxedS $ R.map sigmoid $ wws `R.mmultS` iis
+hiddenProbs :: HxI U -> IxB U -> HxB D
+hiddenProbs (HxI wws) (IxB iis) = R.map sigmoid $ wws `R.mmultS` iis
 {-# INLINE hiddenProbs #-}
 
 {--
