@@ -16,12 +16,14 @@ import Data.Word(Word8)
 --impl modules
 import Data.Array.Repa(Array
                       ,U
+                      ,D
                       ,DIM2
                       ,DIM1
                       ,Any(Any)
                       ,Z(Z)
                       ,(:.)((:.))
                       ,All(All)
+                      ,(*^)
                       )
 import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.Algorithms.Randomish as R
@@ -35,18 +37,37 @@ import System.Random(RandomGen
 
 import Control.Monad.Identity(runIdentity)
 
-type RBM = Array U DIM2 Double -- weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
+{--
+ - weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
+ --}
+type RBM = HxI
 
-weights :: RBM -> Array U DIM2 Double
-weights = id
+{--
+ - data types to keep track of matrix orientation
+ -
+ - H num hidden nodes
+ - I num input nodes
+ - B batch size
+ --}
+data HxI = HxI { unHxI :: (Array U DIM2 Double)}
+data IxH = IxH { unIxH :: (Array U DIM2 Double)}
+
+data IxB = IxB { unIxB :: (Array U DIM2 Double)}
+data BxI = BxI { unBxI :: (Array U DIM2 Double)}
+
+data HxB = HxB { unHxB :: (Array U DIM2 Double)}
+data BxH = BxH { unBxH :: (Array U DIM2 Double)}
+
+weights :: RBM -> HxI
+weights wws = wws
 {-# INLINE weights #-}
 
 numHidden :: RBM -> Int
-numHidden rb = (row $ R.extent $ weights rb) 
+numHidden rb = (row $ R.extent $ unHxI $ weights rb)
 {-# INLINE numHidden #-}
 
 numInputs :: RBM -> Int
-numInputs rb = (col $ R.extent $ weights rb) 
+numInputs rb = (col $ R.extent $ unHxI $ weights rb)
 {-# INLINE numInputs #-}
 
 row :: DIM2 -> Int
@@ -63,88 +84,48 @@ len (Z :. i ) = i
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
-rbm r ni nh = nw
+rbm r ni nh = HxI nw
    where
       nw = R.randomishDoubleArray (Z :. nh :. ni) 0 1 (fst $ random r)
 
-{-- 
+{--
  - given an rbm and a biased input array, generate the energy
  - should be: negate $ sumAll $ weights *^ (hidden `tensor` biased)
  - but everything is unrolled to experiment with Repa's parallelization
  --}
-energy :: RBM -> Array U DIM1 Double -> Double
+energy :: RBM -> BxI -> Double
 energy rb biased = negate ee
    where
-      ee = runIdentity $ hhs `R.deepSeqArray` R.sumAllP $ R.fromFunction sh (computeEnergyMatrix wws biased hhs)
+      ee = R.sumAllS $ (unHxI wws) *^ ((unHxB hhs) `R.mmultS` (unBxI biased))
       wws = weights rb
       hhs = hiddenProbs rb biased
-      sh = (Z :. nh :. ni)
-      ni = numInputs rb
-      nh = numHidden rb
-
-computeEnergyMatrix ::  Array U DIM2 Double -> Array U DIM1 Double -> Array U DIM1 Double -> DIM2 -> Double 
-computeEnergyMatrix wws biased hhs sh = ww * ii * hh
-   where
-      rr = row sh 
-      cc = col sh 
-      ww = wws `R.index` sh
-      ii = biased `R.index` (Z :. cc) 
-      hh = hhs `R.index` (Z :. rr)
-{-# INLINE computeEnergyMatrix #-}
 
 {--
  - given a biased input generate probabilities of the hidden layer
  - incuding the biased probability
  -
- - map sigmoid $ weights `mmult` biased
+ - map sigmoid $ biased `mmult` weights
  -
- - 
  --}
-hiddenProbs :: RBM -> Array U DIM1 Double -> Array U DIM1 Double
-hiddenProbs rb biased = R.computeUnboxedS $ R.fromFunction shape (computeHiddenProb wws biased)
-   where
-      wws = weights rb
-      shape = (Z :. (numHidden rb))
+hiddenProbs :: HxI -> IxB -> HxB
+hiddenProbs (HxI wws) (IxB iis) = R.computeUnboxedS $ R.map sigmoid $ wws `R.mmultS` iis
 {-# INLINE hiddenProbs #-}
 
 {--
- - sigmoid of the dot product of the row
- --}
-computeHiddenProb :: Array U DIM2 Double -> Array U DIM1 Double -> DIM1 -> Double
-computeHiddenProb wws biased xi = sigmoid sm
-   where
-      rw = R.slice wws (Any :. (len xi) :. All)
-      sm = R.sumAllS $ R.zipWith (*) rw biased
-{-# INLINE computeHiddenProb #-}
-
-{--
- - given a biased hidden sample generate probabilities of the input layer
+ - given a batch biased hidden sample generate probabilities of the input layer
  - incuding the biased probability
  -
  - transpose of the hiddenProbs function
  -
  - map sigmoid $ (transpose inputs) `mmult` weights
- - 
- --} 
-inputProbs :: RBM -> Array U DIM1 Double -> Array U DIM1 Double
-inputProbs rb hidden = R.computeUnboxedS $ R.fromFunction shape (computeInputProb wws hidden)
-   where
-      shape = (Z :. (numInputs rb))
-      wws = weights rb
+ -
+ --}
+inputProbs :: BxH -> HxI -> BxI
+inputProbs (BxH hhs) (HxI wws) = R.computeUnboxedS $ R.map sigmoid $ hhs `R.mmultS` wws
 {-# INLINE inputProbs #-}
 
-{--
- - sigmoid of the dot product of the col
- --}
-computeInputProb :: Array U DIM2 Double -> Array U DIM1 Double -> DIM1 -> Double
-computeInputProb wws hidden xi = sigmoid sm
-   where
-      rw = R.slice wws (Any :. (len xi))
-      sm = R.sumAllS $ R.zipWith (*) rw hidden
-{-# INLINE computeInputProb #-}
-
 -- update the rbm weights from each batch
-learn :: RandomGen r => r -> RBM -> [Array U DIM2 Double]-> RBM
+learn :: RandomGen r => r -> RBM -> [IxB]-> RBM
 learn _ rb [] = rb
 learn rand rb iis = rb `R.deepSeqArray` learn r2 nrb (tail iis)
    where
@@ -152,67 +133,64 @@ learn rand rb iis = rb `R.deepSeqArray` learn r2 nrb (tail iis)
       nrb = batch r1 rb (head iis)
 {-# INLINE learn #-}
 
--- given a batch of unbiased inputs, update the rbm weights from the batch at once 
-batch :: RandomGen r => r -> RBM -> Array U DIM2 Double -> RBM
+-- given a batch of unbiased inputs, update the rbm weights from the batch at once
+batch :: RandomGen r => r -> RBM -> IxB -> RBM
 batch rand rb biased = uw
    where
-      uw = R.computeUnboxedP $ R.zipWith (+) (weights rb) wd
+      uw = R.computeUnboxedS $ R.zipWith (+) (weights rb) wd
       wd = weightUpdate rand rb biased
 {-# INLINE batch #-}
 
 -- given an unbiased input batch, generate the the RBM weight updates
-weightUpdate :: RandomGen r => r -> RBM -> Array U DIM2 Double -> Array D DIM2 Double
-weightUpdate rand rb biased = R.zipWith (-) w1 w2
+weightUpdate :: RandomGen r => r -> RBM -> IxB -> HxI
+weightUpdate rand rb biased = HxI $ R.computeUnboxedS $ R.zipWith (-) w1 w2
    where
       (r1,r2) = split rand
-      hiddens = generate r1 rb biased
-      newins = regenerate r2 rb hiddens
-      hiddens' = transpose hiddens
-      w1 = hiddens' `R.mmultP` biased
-      w2 = hiddens' `R.mmultP` newins 
+      hiddens = unHxB $ generate r1 rb biased
+      newins = unBxI $ regenerate r2 rb hiddens
+      w1 = hiddens `R.mmultS` biased
+      w2 = hiddens `R.mmultS` newins
 {-# INLINE weightUpdate #-}
 
-
 -- given a biased input batch [(1:input)], generate a biased hidden layer sample batch
-generate :: RandomGen r => r -> RBM -> Array U DIM2 Double -> Array D DIM2 Double
-generate rand rb biased = R.fromFunction (Z :. nb :. nh) gen
+generate :: RandomGen r => r -> RBM -> IxB -> HxB
+generate rand rb biased = HxB $ R.computeUnboxedS $ R.zipWith checkP hhs rands
    where
-      gen sh = genProbs (hiddenProbs rb biased) rands sh
-      rands = R.randomishDoubleArray (Z :. nb :. nh)  0 1 (fst $ random rand)
-      nb = row biased
-      nh = numHidden rb
+      hhs = unHxB $ hiddenProbs rb biased
+      rands = unHxB $ randomArrayHxB (fst $ random rand) (R.extent hhs)
 {-# INLINE generate #-}
 
 -- given a batch of biased hidden layer samples, generate a batch of biased input layer samples
-regenerate :: RandomGen r => r -> RBM -> Array U DIM2 Double -> Array D DIM2 Double
-regenerate rand rb hidden = R.fromFunction (Z :. nb : ni) gen 
+regenerate :: RandomGen r => r -> RBM -> BxH -> BxI
+regenerate rand rb hidden = BxI $ R.computeUnboxedS $ R.zipWith checkP iis rands
    where
-      gen sh = genProbs (inputProbs rb hidden) rands sh
-      rands = R.randomishDoubleArray (Z :. nb :. ni ) 0 1 (fst $ random rand)
-      nb = rows hidden
-      ni = numInputs rb
+      iis = unBxI $ inputProbs hidden rb
+      rands = unBxI $ randomArrayBxI (fst $ random rand) (R.extent iis)
 {-# INLINE regenerate #-}
+
+randomArrayBxI :: Int -> DIM2 -> BxI
+randomArrayBxI seed sh = BxI $ R.traverse rands id set
+   where
+      rands = R.randomishDoubleArray sh 0 1 seed
+      set _ (Z :. _ :. 0) = 0
+      set ff sh = ff sh
+{-# INLINE randomArrayBxI #-}
+
+randomArrayHxB :: Int -> DIM2 -> HxB
+randomArrayHxB seed sh = HxB $ R.traverse rands id set
+   where
+      rands = R.randomishDoubleArray sh 0 1 seed
+      set _ (Z :. 0 :. _) = 0
+      set ff sh = ff sh
+{-# INLINE randomArrayHxB #-}
 
 --sample is 0 if generated number gg is greater then probabiliy pp
 --so the higher pp the more likely that it will generate a 1
-genProbs :: Array U DIM1 Double -> Array U DIM2 Double -> DIM2 -> Double
-genProbs probs rands sh
-   | (col sh) == 0 = 1
-   | (probs `R.index` (Z :. (col sh))) > (rands `R.index` sh) = 1
+checkP ::  Double -> Double -> Double
+checkP gen rand
+   | gen > rand = 1
    | otherwise = 0
-{-# INLINE genProbs #-}
-
--- row vec * col vec
--- or (r x 1) * (1 x c) -> (r x c) matrix multiply 
-tensor :: Array U DIM2 Double -> Array U DIM2 Double -> Array D DIM3 Double
-tensor a1 a2 = R.mmultS a1' a2'
-   where
-      a1' :: Array U DIM2 Double
-      a1' = R.computeUnboxedS $ R.reshape (Z :. len (R.extent a1) :. 1) a1
-      a2' :: Array U DIM2 Double
-      a2' = R.computeUnboxedS $ R.reshape (Z :. 1 :. len (R.extent a2)) a2
-{-# INLINE tensor #-}
- 
+{-# INLINE checkP #-}
 
 -- sigmoid function
 sigmoid :: Double -> Double
@@ -266,15 +244,6 @@ prop_init gen ni nh = (fi ni) * (fi nh)  == (length $ R.toList $ weights rb)
       fi :: Word8 -> Int
       fi ww = 1 + (fromIntegral ww)
 
-prop_tensor :: Bool
-prop_tensor = rv == [1*4,1*5,2*4,2*5,3*4,3*5]
-   where
-      rv = R.toList (a1 `tensor` a2)
-      a1 :: Array U DIM1 Double
-      a1 = R.fromListUnboxed (Z:.3) [1,2,3]
-      a2 :: Array U DIM1 Double
-      a2 = R.fromListUnboxed (Z:.2) [4,5]
-
 prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
 prop_hiddenProbs gen ni nh = (fi nh) == (len $ R.extent pp)
    where
@@ -286,8 +255,8 @@ prop_hiddenProbs gen ni nh = (fi nh) == (len $ R.extent pp)
 prop_hiddenProbs2 :: Bool
 prop_hiddenProbs2 = pp == map sigmoid [h0, h1]
    where
-      h0 = w00 * i0 + w01 * i1 + w02 * i2  
-      h1 = w10 * i0 + w11 * i1 + w12 * i2 
+      h0 = w00 * i0 + w01 * i1 + w02 * i2
+      h1 = w10 * i0 + w11 * i1 + w12 * i2
       i0:i1:i2:_ = [1..]
       w00:w01:w02:w10:w11:w12:_ = [1..]
       wws = [w00,w01,w02,w10,w11,w12]
@@ -331,7 +300,6 @@ test = do
        runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
    runtest "init"     prop_init
    runtest "energy"   prop_energy
-   runtest "tensor"   prop_tensor
    runtest "hiddenp"  prop_hiddenProbs
    runtest "hiddenp2" prop_hiddenProbs2
    runtest "inputp"   prop_inputProbs
