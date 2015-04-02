@@ -54,25 +54,13 @@ type RBM = HxI
  - B batch size
  --}
 data HxI = HxI { unHxI :: (Array U DIM2 Double)}
-data IxH = IxH { unIxH :: (Array U DIM2 Double)}
-
-data IxB = IxB { unIxB :: (Array U DIM2 Double)}
 data BxI = BxI { unBxI :: (Array U DIM2 Double)}
-
 data HxB = HxB { unHxB :: (Array U DIM2 Double)}
 data BxH = BxH { unBxH :: (Array U DIM2 Double)}
 
 weights :: RBM -> HxI
 weights wws = wws
 {-# INLINE weights #-}
-
-numHidden :: RBM -> Int
-numHidden rb = (row $ R.extent $ unHxI $ weights rb)
-{-# INLINE numHidden #-}
-
-numInputs :: RBM -> Int
-numInputs rb = (col $ R.extent $ unHxI $ weights rb)
-{-# INLINE numInputs #-}
 
 row :: DIM2 -> Int
 row (Z :. r :. _) = r
@@ -98,14 +86,14 @@ rbm r ni nh = HxI nw
  - but everything is unrolled to experiment with Repa's parallelization
  --}
 energy :: (Functor m, Monad m) => RBM -> Array U DIM1 Double -> m Double
-energy rb inputs = do 
-   let wws = weights rb
-       sz = len $ R.extent $ inputs
-   bxi <- BxI <$> (d2u $ R.reshape (Z :. 1 :. sz) inputs)
-   hxb <- hiddenProbs rb bxi
-   hxi <- HxI <$> ((unHxB hxb) `R.mmultP` (unBxI bxi))
-   ee <- R.sumAllP $ (unHxI wws) *^ (unHxI hxi)
-   return $ negate ee
+energy rb ins = do 
+   let wws = unHxI $ weights rb
+       sz = len $ R.extent $ ins
+   bxi <- (d2u $ R.reshape (Z :. 1 :. sz) ins)
+   hxb <- (unHxB <$> hiddenProbs rb (BxI bxi))
+   hxi <- hxb `mmultP` bxi
+   enr <- (R.sumAllP $ wws *^ hxi)
+   return $ negate enr
 
 d2u :: (Monad m, R.Shape a) => Array D a Double -> m (Array U a Double)
 d2u ar = R.computeP ar
@@ -119,8 +107,8 @@ d2u ar = R.computeP ar
  --}
 hiddenProbs :: (Functor m, Monad m) => HxI -> BxI -> m HxB
 hiddenProbs wws iis = do
-   hxb <- (unHxI wws) `mmultPT` (unBxI iis)
-   HxB <$> (d2u $ R.map sigmoid hxb)
+   hxb <- (unHxI wws) `mmultTP` (unBxI iis)
+   HxB <$> (hxb `R.deepSeqArray` (d2u $ R.map sigmoid hxb))
 {-# INLINE hiddenProbs #-}
 
 {--
@@ -134,8 +122,8 @@ hiddenProbs wws iis = do
  --}
 inputProbs :: (Functor m, Monad m) => BxH -> HxI -> m BxI
 inputProbs hhs wws = do
-   bxi <- (unBxH hhs) `R.mmultP` (unHxI wws)
-   BxI <$> (d2u $ R.map sigmoid bxi)
+   bxi <- (unBxH hhs) `mmultP` (unHxI wws)
+   BxI <$> (bxi `R.deepSeqArray` (d2u $ R.map sigmoid bxi))
 {-# INLINE inputProbs #-}
 
 -- update the rbm weights from each batch
@@ -161,8 +149,8 @@ weightUpdate rand rb biased = do
    hxb <- generate r1 rb biased
    bxh <- BxH <$> (R.transpose2P (unHxB hxb))
    newins <- regenerate r2 rb bxh
-   w1 <- (unHxB hxb) `R.mmultP` (unBxI biased)
-   w2 <- (unHxB hxb) `R.mmultP` (unBxI newins)
+   w1 <- (unHxB hxb) `mmultP` (unBxI biased)
+   w2 <- (unHxB hxb) `mmultP` (unBxI newins)
    HxI <$> (d2u $ R.zipWith (-) w1 w2)
 {-# INLINE weightUpdate #-}
 
@@ -187,7 +175,7 @@ randomArrayBxI seed sh = BxI <$> (d2u $ R.traverse rands id set)
    where
       rands = R.randomishDoubleArray sh 0 1 seed
       set _ (Z :. _ :. 0) = 0
-      set ff sh = ff sh
+      set ff sh' = ff sh'
 {-# INLINE randomArrayBxI #-}
 
 randomArrayHxB :: (Functor m, Monad m) => Int -> DIM2 -> m HxB
@@ -195,7 +183,7 @@ randomArrayHxB seed sh = HxB <$> (d2u $ R.traverse rands id set)
    where
       rands = R.randomishDoubleArray sh 0 1 seed
       set _ (Z :. 0 :. _) = 0
-      set ff sh = ff sh
+      set ff sh' = ff sh'
 {-# INLINE randomArrayHxB #-}
 
 --sample is 0 if generated number gg is greater then probabiliy pp
@@ -211,12 +199,16 @@ sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 {-# INLINE sigmoid #-}
 
---multiple a x (transpose b)
-mmultPT  :: Monad m
+{--
+ - matrix multiply
+ - a x (transpose b)
+ - based on mmultP from repa-algorithms-3.3.1.2
+ -}
+mmultTP  :: Monad m
         => Array U DIM2 Double 
         -> Array U DIM2 Double 
         -> m (Array U DIM2 Double)
-mmultPT arr trr 
+mmultTP arr trr 
  = [arr, trr] `R.deepSeqArrays` 
    do   
         let (Z :. h1  :. _) = R.extent arr
@@ -227,138 +219,151 @@ mmultPT arr trr
                   $ R.zipWith (*)
                         (Unsafe.unsafeSlice arr (Any :. (row ix) :. All))
                         (Unsafe.unsafeSlice trr (Any :. (col ix) :. All))
-{-# NOINLINE mmultPT #-}
--- -- tests
--- 
--- -- test to see if we can learn a random string
--- prop_learned :: Word8 -> Word8 -> Bool
--- prop_learned ni nh = (tail $ R.toList regened) == (tail $ R.toList inputarr)
---    where
---       regened = regenerate (mr 2) lrb $ generate (mr 3) lrb inputarr
---       --learn the inputs
--- 
---       lrb = learn (mr 1) rb [inputbatch]
---       --creates a random number generator with a seed
--- 
---       rb = rbm (mr 0) (fi ni) (fi nh)
---       inputbatch = R.fromListUnboxed (Z:. batchsz :.fi ni) $ concat $ replicate batchsz inputlst
---       inputarr = R.fromListUnboxed (Z:. fi ni) $ inputlst
---       inputlst = take (fi ni) $ map fromIntegral $ randomRs (0::Int,1::Int) (mr 4)
---       fi ww = 1 + (fromIntegral ww)
---       mr i = mkStdGen (fi ni + fi nh + i)
---       batchsz = 2000
--- 
--- 
--- prop_learn :: Word8 -> Word8 -> Bool
--- prop_learn ni nh = (R.extent $ weights rb) == (R.extent $ weights $ lrb)
---    where
---       lrb = learn rand rb [inputs]
---       inputs = R.fromListUnboxed (Z:.fi nh:.fi ni) $ take ((fi ni) * (fi nh)) $ cycle [0,1]
---       rand = mkStdGen $ fi nh
---       rb = rbm rand (fi ni) (fi nh)
---       fi ww = 1 + (fromIntegral ww)
--- 
--- prop_batch :: Word8 -> Word8 -> Word8 -> Bool
--- prop_batch ix ni nh = (R.extent $ weights rb) == (R.extent $ weights $ lrb)
---    where
---       lrb = batch rand rb inputs
---       rb = rbm rand (fi ni) (fi nh)
---       rand = mkStdGen $ fi ix
---       inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
---       fi ww = 1 + (fromIntegral ww)
--- 
--- prop_init :: Int -> Word8 -> Word8 -> Bool
--- prop_init gen ni nh = (fi ni) * (fi nh)  == (length $ R.toList $ weights rb)
---    where
---       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
---       fi :: Word8 -> Int
---       fi ww = 1 + (fromIntegral ww)
--- 
--- prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
--- prop_hiddenProbs gen ni nh = (fi nh) == (len $ R.extent pp)
---    where
---       pp = hiddenProbs rb input
---       input = R.randomishDoubleArray (Z :. (fi ni)) 0 1 gen
---       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
---       fi ww = 1 + (fromIntegral ww)
--- 
--- prop_hiddenProbs2 :: Bool
--- prop_hiddenProbs2 = pp == map sigmoid [h0, h1]
---    where
---       h0 = w00 * i0 + w01 * i1 + w02 * i2
---       h1 = w10 * i0 + w11 * i1 + w12 * i2
---       i0:i1:i2:_ = [1..]
---       w00:w01:w02:w10:w11:w12:_ = [1..]
---       wws = [w00,w01,w02,w10,w11,w12]
---       input = R.fromListUnboxed (Z:.3) $ [i0,i1,i2]
---       pp = R.toList $ hiddenProbs rb input
---       rb = R.fromListUnboxed (Z:.2:.3) $ wws
--- 
--- prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
--- prop_inputProbs gen ni nh = (fi ni) == (len $ R.extent pp)
---    where
---       pp = inputProbs rb hidden
---       hidden = R.randomishDoubleArray (Z :. (fi nh)) 0 1 gen
---       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
---       fi ww = 1 + (fromIntegral ww)
--- 
--- prop_inputProbs2 :: Bool
--- prop_inputProbs2 = pp == map sigmoid [i0,i1,i2]
---    where
---       i0 = w00 * h0 + w10 * h1
---       i1 = w01 * h0 + w11 * h1
---       i2 = w02 * h0 + w12 * h1
---       h0:h1:_ = [1..]
---       w00:w01:w02:w10:w11:w12:_ = [1..]
---       wws = [w00,w01,w02,w10,w11,w12]
---       hiddens = R.fromListUnboxed (Z:.2) [h0,h1]
---       pp = R.toList $ d2u $ unBxI $ inputProbs rb hiddens
---       rb = R.fromListUnboxed (Z:.2:.3) $ wws
--- 
--- prop_energy :: Int -> Word8 -> Word8 -> Bool
--- prop_energy gen ni nh = not $ isNaN ee
---    where
---       ee = energy rb input
---       input = R.randomishDoubleArray (Z :. (fi ni)) 0 1 gen
---       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
---       fi ww = 1 + (fromIntegral ww)
--- 
--- test :: IO ()
--- test = do
---    let check rr = if (isSuccess rr) then return () else exitFailure
---        cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
---        runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
---    runtest "init"     prop_init
---    runtest "energy"   prop_energy
---    runtest "hiddenp"  prop_hiddenProbs
---    runtest "hiddenp2" prop_hiddenProbs2
---    runtest "inputp"   prop_inputProbs
---    runtest "inputp2"  prop_inputProbs2
---    runtest "batch"    prop_batch
---    runtest "learn"    prop_learn
---    runtest "learned"  prop_learned
--- 
--- perf :: IO ()
--- perf = do
---    let file = "dist/perf-repa-RBM.html"
---        cfg = defaultConfig { reportFile = Just file, timeLimit = 1.0 }
---    defaultMainWith cfg [
---        bgroup "energy" [ bench "63x63"  $ whnf (prop_energy 0 63) 63
---                        , bench "127x127"  $ whnf (prop_energy 0 127) 127
---                        , bench "255x255"  $ whnf (prop_energy 0 255) 255
---                        ]
---       ,bgroup "hidden" [ bench "63x63"  $ whnf (prop_hiddenProbs 0 63) 63
---                        , bench "127x127"  $ whnf (prop_hiddenProbs 0 127) 127
---                        , bench "255x255"  $ whnf (prop_hiddenProbs 0 255) 255
---                        ]
---       ,bgroup "input" [ bench "63x63"  $ whnf (prop_inputProbs 0 63) 63
---                       , bench "127x127"  $ whnf (prop_inputProbs 0 127) 127
---                       , bench "255x255"  $ whnf (prop_inputProbs 0 255) 255
---                       ]
---       ,bgroup "batch" [ bench "15"  $ whnf (prop_batch 15 15) 15
---                       , bench "63x63"  $ whnf (prop_batch 63 63) 63
---                       , bench "127x127"  $ whnf (prop_batch 127 127) 127
---                       , bench "255x255"  $ whnf (prop_batch 255 255) 255
---                       ]
---       ]
---    putStrLn $ "perf log written to " ++ file
+{-# NOINLINE mmultTP #-}
+
+{--
+ - regular matrix multiply
+ - a x b
+ - based on mmultP from repa-algorithms-3.3.1.2
+ - basically moved the deepseq to seq the trr instead of brr
+ -}
+mmultP  :: Monad m
+        => Array U DIM2 Double 
+        -> Array U DIM2 Double 
+        -> m (Array U DIM2 Double)
+mmultP arr brr 
+ = do   trr <- R.transpose2P brr
+        mmultTP arr trr
+{-# NOINLINE mmultP #-}
+-- tests
+
+-- test to see if we can learn a random string
+prop_learned :: Word8 -> Word8 -> Bool
+prop_learned ni nh = runIdentity $ do
+   let rb = rbm (mr 0) (fi ni) (fi nh)
+       inputbatchL = concat $ replicate batchsz inputlst
+       inputbatch = BxI $ R.fromListUnboxed (Z:. batchsz :.fi ni) $ inputbatchL
+       inputarr = BxI $ R.fromListUnboxed (Z:. 1 :. fi ni) $ inputlst
+       inputlst = take (fi ni) $ map fromIntegral $ randomRs (0::Int,1::Int) (mr 4)
+       fi ww = 1 + (fromIntegral ww)
+       mr i = mkStdGen (fi ni + fi nh + i)
+       batchsz = 2000
+   lrb <- learn (mr 1) rb [inputbatch]
+   hxb <- generate (mr 3) lrb inputarr
+   bxh <- BxH <$> (R.transpose2P $ unHxB hxb)
+   regened <- regenerate (mr 2) lrb bxh
+   return $ (tail $ R.toList $ unBxI $ regened) == (tail $ R.toList $ unBxI $ inputarr)
+
+prop_learn :: Word8 -> Word8 -> Bool
+prop_learn ni nh = runIdentity $ do
+   let inputs = R.fromListUnboxed (Z:.fi nh:.fi ni) $ take ((fi ni) * (fi nh)) $ cycle [0,1]
+       rand = mkStdGen $ fi nh
+       rb = rbm rand (fi ni) (fi nh)
+       fi ww = 1 + (fromIntegral ww)
+   lrb <- learn rand rb [BxI inputs]
+   return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
+
+prop_batch :: Word8 -> Word8 -> Word8 -> Bool
+prop_batch ix ni nh = runIdentity $ do 
+   let rb = rbm rand (fi ni) (fi nh)
+       rand = mkStdGen $ fi ix
+       inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
+       fi ww = 1 + (fromIntegral ww)
+   lrb <- batch rand rb (BxI inputs)
+   return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
+
+prop_init :: Int -> Word8 -> Word8 -> Bool
+prop_init gen ni nh = (fi ni) * (fi nh)  == (length $ R.toList $ unHxI $ weights rb)
+   where
+      rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+      fi :: Word8 -> Int
+      fi ww = 1 + (fromIntegral ww)
+
+prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
+prop_hiddenProbs gen ni nh = runIdentity $ do
+   let rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+       fi ww = 1 + (fromIntegral ww)
+       input = BxI $ (R.randomishDoubleArray (Z :. 1 :. (fi ni)) 0 1 gen)
+   pp <- hiddenProbs rb input
+   return $ (fi nh) == (row $ R.extent $ unHxB pp)
+
+prop_hiddenProbs2 :: Bool
+prop_hiddenProbs2 = runIdentity $ do 
+   let h0 = w00 * i0 + w01 * i1 + w02 * i2
+       h1 = w10 * i0 + w11 * i1 + w12 * i2
+       i0:i1:i2:_ = [1..]
+       w00:w01:w02:w10:w11:w12:_ = [1..]
+       wws = [w00,w01,w02,w10,w11,w12]
+       input = BxI $ R.fromListUnboxed (Z:.1:.3) $ [i0,i1,i2]
+       rb = HxI $ R.fromListUnboxed (Z:.2:.3) $ wws
+   pp <- R.toList <$> unHxB <$> hiddenProbs rb input
+   return $ pp == map sigmoid [h0, h1]
+
+prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
+prop_inputProbs gen ni nh = runIdentity $ do
+   let hidden = BxH $ R.randomishDoubleArray (Z :. 1 :. (fi nh)) 0 1 gen
+       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+       fi ww = 1 + (fromIntegral ww)
+   pp <- unBxI <$> inputProbs hidden rb 
+   return $ (fi ni) == (col $ R.extent pp)
+
+prop_inputProbs2 :: Bool
+prop_inputProbs2 = runIdentity $ do 
+   let i0 = w00 * h0 + w10 * h1
+       i1 = w01 * h0 + w11 * h1
+       i2 = w02 * h0 + w12 * h1
+       h0:h1:_ = [1..]
+       w00:w01:w02:w10:w11:w12:_ = [1..]
+       wws = [w00,w01,w02,w10,w11,w12]
+       hiddens = BxH $ R.fromListUnboxed (Z:.1:.2) [h0,h1]
+       rb = HxI $ R.fromListUnboxed (Z:.2:.3) $ wws
+   pp <- R.toList <$> unBxI <$> inputProbs hiddens rb 
+   return $ pp == map sigmoid [i0,i1,i2]
+
+prop_energy :: Int -> Word8 -> Word8 -> Bool
+prop_energy gen ni nh = runIdentity $ do 
+   let input = R.randomishDoubleArray (Z :. (fi ni)) 0 1 gen
+       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+       fi ww = 1 + (fromIntegral ww)
+   ee <- energy rb input
+   return $ not $ isNaN ee
+
+test :: IO ()
+test = do
+   let check rr = if (isSuccess rr) then return () else exitFailure
+       cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
+       runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
+   runtest "init"     prop_init
+   runtest "energy"   prop_energy
+   runtest "hiddenp"  prop_hiddenProbs
+   runtest "hiddenp2" prop_hiddenProbs2
+   runtest "inputp"   prop_inputProbs
+   runtest "inputp2"  prop_inputProbs2
+   runtest "batch"    prop_batch
+   runtest "learn"    prop_learn
+   runtest "learned"  prop_learned
+
+perf :: IO ()
+perf = do
+   let file = "dist/perf-repa-RBM.html"
+       cfg = defaultConfig { reportFile = Just file, timeLimit = 1.0 }
+   defaultMainWith cfg [
+       bgroup "energy" [ bench "63x63"  $ whnf (prop_energy 0 63) 63
+                       , bench "127x127"  $ whnf (prop_energy 0 127) 127
+                       , bench "255x255"  $ whnf (prop_energy 0 255) 255
+                       ]
+      ,bgroup "hidden" [ bench "63x63"  $ whnf (prop_hiddenProbs 0 63) 63
+                       , bench "127x127"  $ whnf (prop_hiddenProbs 0 127) 127
+                       , bench "255x255"  $ whnf (prop_hiddenProbs 0 255) 255
+                       ]
+      ,bgroup "input" [ bench "63x63"  $ whnf (prop_inputProbs 0 63) 63
+                      , bench "127x127"  $ whnf (prop_inputProbs 0 127) 127
+                      , bench "255x255"  $ whnf (prop_inputProbs 0 255) 255
+                      ]
+      ,bgroup "batch" [ bench "15"  $ whnf (prop_batch 15 15) 15
+                      , bench "63x63"  $ whnf (prop_batch 63 63) 63
+                      , bench "127x127"  $ whnf (prop_batch 127 127) 127
+                      , bench "255x255"  $ whnf (prop_batch 255 255) 255
+                      ]
+      ]
+   putStrLn $ "perf log written to " ++ file
