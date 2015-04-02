@@ -13,6 +13,7 @@ dist/cabal.build.ok:$(hs_files) dist/setup-config
 
 clean:
 	rm -f *.tix
+	rm -f mnist.pkl.gz
 	cabal clean
 
 dist/setup-config:$(cabal_files) Makefile
