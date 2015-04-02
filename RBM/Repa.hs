@@ -82,8 +82,6 @@ rbm r ni nh = HxI nw
 
 {--
  - given an rbm and a biased input array, generate the energy
- - should be: negate $ sumAll $ weights *^ (hidden `tensor` biased)
- - but everything is unrolled to experiment with Repa's parallelization
  --}
 energy :: (Functor m, Monad m) => RBM -> Array U DIM1 Double -> m Double
 energy rb ins = do 
