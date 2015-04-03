@@ -54,7 +54,9 @@ type RBM = HxI
  - B batch size
  --}
 data HxI = HxI { unHxI :: (Array U DIM2 Double)}
+data IxH = IxH { unIxH :: (Array U DIM2 Double)}
 data BxI = BxI { unBxI :: (Array U DIM2 Double)}
+data IxB = IxB { unIxB :: (Array U DIM2 Double)}
 data HxB = HxB { unHxB :: (Array U DIM2 Double)}
 data BxH = BxH { unBxH :: (Array U DIM2 Double)}
 
@@ -120,10 +122,10 @@ hiddenProbs wws iis = do
  - map sigmoid $ (transpose inputs) `mmult` weights
  -
  --}
-inputProbs :: (Functor m, Monad m) => BxH -> HxI -> m BxI
-inputProbs hhs wws = do
-   bxi <- (unBxH hhs) `mmultP` (unHxI wws)
-   BxI <$> (bxi `R.deepSeqArray` (d2u $ R.map sigmoid bxi))
+inputProbs :: (Functor m, Monad m) => IxH -> BxH -> m IxB
+inputProbs wws hhs = do
+   ixb <- (unIxH wws) `mmultTP` (unBxH hhs)
+   IxB <$> (ixb `R.deepSeqArray` (d2u $ R.map sigmoid ixb))
 {-# INLINE inputProbs #-}
 
 -- update the rbm weights from each batch
@@ -144,18 +146,20 @@ batch rand rb biased = do
 
 -- given an unbiased input batch, generate the the RBM weight updates
 weightUpdate :: (Functor m, Monad m, RandomGen r) => r -> RBM -> BxI -> m HxI
-weightUpdate rand rb biased = do 
+weightUpdate rand hxi bxi = do 
    let (r1,r2) = split rand
-   hxb <- generate r1 rb biased
+   hxb <- generate r1 hxi bxi
    bxh <- BxH <$> (R.transpose2P (unHxB hxb))
-   newins <- regenerate r2 rb bxh
-   w1 <- (unHxB hxb) `mmultP` (unBxI biased)
-   w2 <- (unHxB hxb) `mmultP` (unBxI newins)
+   ixh <- IxH <$> (R.transpose2P (unHxI hxi))
+   ixb <- IxB <$> (R.transpose2P (unBxI bxi))
+   ixb' <- regenerate r2 ixh bxh
+   w1 <- (unHxB hxb) `mmultTP` (unIxB ixb)
+   w2 <- (unHxB hxb) `mmultTP` (unIxB ixb')
    HxI <$> (d2u $ R.zipWith (-) w1 w2)
 {-# INLINE weightUpdate #-}
 
 -- given a biased input batch [(1:input)], generate a biased hidden layer sample batch
-generate :: (Functor m, Monad m, RandomGen r) => r -> RBM -> BxI -> m HxB
+generate :: (Functor m, Monad m, RandomGen r) => r -> HxI -> BxI -> m HxB
 generate rand rb biased = do 
    hhs <- unHxB <$> hiddenProbs rb biased
    rands <- unHxB <$> randomArrayHxB (fst $ random rand) (R.extent hhs)
@@ -163,20 +167,20 @@ generate rand rb biased = do
 {-# INLINE generate #-}
 
 -- given a batch of biased hidden layer samples, generate a batch of biased input layer samples
-regenerate :: (Functor m, Monad m, RandomGen r) => r -> RBM -> BxH -> m BxI
+regenerate :: (Functor m, Monad m, RandomGen r) => r -> IxH -> BxH -> m IxB
 regenerate rand rb hidden = do 
-   iis <- unBxI <$> inputProbs hidden rb
-   rands <- unBxI <$> (randomArrayBxI (fst $ random rand) (R.extent iis))
-   BxI <$> (d2u $ R.zipWith checkP iis rands)
+   iis <- unIxB <$> inputProbs rb hidden 
+   rands <- unIxB <$> (randomArrayIxB (fst $ random rand) (R.extent iis))
+   IxB <$> (d2u $ R.zipWith checkP iis rands)
 {-# INLINE regenerate #-}
 
-randomArrayBxI :: (Functor m, Monad m) => Int -> DIM2 -> m BxI
-randomArrayBxI seed sh = BxI <$> (d2u $ R.traverse rands id set)
+randomArrayIxB :: (Functor m, Monad m) => Int -> DIM2 -> m IxB
+randomArrayIxB seed sh = IxB <$> (d2u $ R.traverse rands id set)
    where
       rands = R.randomishDoubleArray sh 0 1 seed
       set _ (Z :. _ :. 0) = 0
       set ff sh' = ff sh'
-{-# INLINE randomArrayBxI #-}
+{-# INLINE randomArrayIxB #-}
 
 randomArrayHxB :: (Functor m, Monad m) => Int -> DIM2 -> m HxB
 randomArrayHxB seed sh = HxB <$> (d2u $ R.traverse rands id set)
@@ -250,9 +254,11 @@ prop_learned ni nh = runIdentity $ do
        batchsz = 2000
    lrb <- learn (mr 1) rb [inputbatch]
    hxb <- generate (mr 3) lrb inputarr
+   ixh <- IxH <$> (R.transpose2P $ unHxI lrb)
    bxh <- BxH <$> (R.transpose2P $ unHxB hxb)
-   regened <- regenerate (mr 2) lrb bxh
-   return $ (tail $ R.toList $ unBxI $ regened) == (tail $ R.toList $ unBxI $ inputarr)
+   ixb <- regenerate (mr 2) ixh bxh
+   bxi <- BxI <$> (R.transpose2P $ unIxB ixb)
+   return $ (tail $ R.toList $ unBxI $ bxi) == (tail $ R.toList $ unBxI $ inputarr)
 
 prop_learn :: Word8 -> Word8 -> Bool
 prop_learn ni nh = runIdentity $ do
@@ -304,8 +310,9 @@ prop_inputProbs gen ni nh = runIdentity $ do
    let hidden = BxH $ R.randomishDoubleArray (Z :. 1 :. (fi nh)) 0 1 gen
        rb = rbm (mkStdGen gen) (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-   pp <- unBxI <$> inputProbs hidden rb 
-   return $ (fi ni) == (col $ R.extent pp)
+   rb' <- IxH <$> (R.transpose2P (unHxI rb))
+   pp <- unIxB <$> inputProbs rb' hidden 
+   return $ (fi ni) == (row $ R.extent pp)
 
 prop_inputProbs2 :: Bool
 prop_inputProbs2 = runIdentity $ do 
@@ -317,8 +324,10 @@ prop_inputProbs2 = runIdentity $ do
        wws = [w00,w01,w02,w10,w11,w12]
        hiddens = BxH $ R.fromListUnboxed (Z:.1:.2) [h0,h1]
        rb = HxI $ R.fromListUnboxed (Z:.2:.3) $ wws
-   pp <- R.toList <$> unBxI <$> inputProbs hiddens rb 
-   return $ pp == map sigmoid [i0,i1,i2]
+   rb' <- IxH <$> (R.transpose2P (unHxI rb))
+   pp <- inputProbs rb' hiddens
+   pp' <- R.toList <$> R.transpose2P (unIxB pp)
+   return $ pp' == map sigmoid [i0,i1,i2]
 
 prop_energy :: Int -> Word8 -> Word8 -> Bool
 prop_energy gen ni nh = runIdentity $ do 
