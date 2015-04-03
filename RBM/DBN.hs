@@ -1,5 +1,7 @@
 module RBM.DBN(dbn
               ,learn
+              ,perf
+              ,test
               ) where
 
 import qualified RBM.Repa as R

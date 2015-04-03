@@ -17,16 +17,16 @@ Library
                      criterion,
                      deepseq
 
---Test-Suite test-list-RBM
---    type:            exitcode-stdio-1.0
---    main-is:         RBM/List.hs
---    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.test
---
---
---Test-Suite perf-list-RBM
---    type:            exitcode-stdio-1.0
---    main-is:         RBM/List.hs
---    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.perf
+Test-Suite test-list-RBM
+    type:            exitcode-stdio-1.0
+    main-is:         RBM/List.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.test
+
+
+Test-Suite perf-list-RBM
+    type:            exitcode-stdio-1.0
+    main-is:         RBM/List.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.List.perf
 
 Test-Suite test-repa-RBM
     type:            exitcode-stdio-1.0
@@ -38,8 +38,14 @@ Test-Suite perf-repa-RBM
     main-is:         RBM/Repa.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.Repa.perf
 
---Test-Suite proto
+Test-Suite proto
+    type:            exitcode-stdio-1.0
+    ghc-options:     -threaded -O3 -main-is RBM.Proto.main
+    main-is:         RBM/Proto.hs
+
+--Test-Suite test-DBN
 --    type:            exitcode-stdio-1.0
---    ghc-options:     -threaded -O3 -main-is RBM.Proto.main
---    main-is:         RBM/Proto.hs
+--    main-is:         RBM/DBN.hs
+--    ghc-options:     -Werror -Wall -threaded -O3 -main-is RBM.DBN.test
+--
 
