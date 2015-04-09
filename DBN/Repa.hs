@@ -4,7 +4,7 @@ module DBN.Repa(dbn
                ,perf
                ,test
                ) where
-
+import Data.Mnist(readImages, toMatrix)
 import qualified RBM.Repa as RBM
 import RBM.Repa(BxI(BxI)
                ,BxH(unBxH)
@@ -70,7 +70,17 @@ row (R.Z R.:. r R.:. _) = r
 {-# INLINE row #-}
 
 test :: IO ()
-test = return ()
+test = do 
+   images <- readImages "mnist.pkl.gz"
+   labels <- readLabels "mnist.pkl.gz"
+   batches <- map toMatrix $ chunksOf 128 images
+   let gen = mkStdGen 0
+       ds = dbn gen [784,500,500,10]
+   dl <- learn gen ds
+   (flip mapM_) [0..9] $ \ ix -> do
+       let batch = filter ((==) ix . fst) $ zip labels images
+       pv <- generate gen dl (toMatrix batch)
+      print (ix, R.toList pv1)
 
 perf :: IO ()
 perf = return ()

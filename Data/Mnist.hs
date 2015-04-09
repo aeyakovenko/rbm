@@ -7,6 +7,7 @@ import Data.Binary.Get
 import Data.Word
 import qualified Data.List.Split as S
 import qualified Data.Array.Repa as R
+import Codec.Compression.GZip as GZ
 
 data Image = Image {
       iRows :: Int
@@ -14,12 +15,13 @@ data Image = Image {
     , iPixels :: [Word8]
     } deriving (Eq, Show)
 
-toMatrix :: Image -> R.Array R.U R.DIM2 Double
-toMatrix image = m
-  where r = iRows image
-        c = iColumns image
-        p = map fromIntegral (iPixels image)
-        m = R.fromListUnboxed (R.Z R.:. r R.:. c) p
+toMatrix :: [Image] -> R.Array R.U R.DIM2 Double
+toMatrix images = m
+  where 
+        m = R.fromListUnboxed (R.Z R.:. len R.:. maxsz) (concatMap pixels images)
+        maxsz = 28 * 28
+        len = length images
+        pixels im = take maxsz $ (map fromIntegral (iPixels im)) ++ [0..]
 
 {-
 toColumnVector :: Image -> Matrix Double
@@ -62,7 +64,7 @@ deserialiseLabels = do
 
 readLabels :: FilePath -> IO [Int]
 readLabels filename = do
-  content <- BL.readFile filename
+  content <- GZ.decompress $ BL.readFile filename
   let (_, _, labels) = runGet deserialiseLabels content
   return (map fromIntegral labels)
 
@@ -95,7 +97,7 @@ deserialiseHeader = do
 
 readImages :: FilePath -> IO [Image]
 readImages filename = do
-  content <- BL.readFile filename
+  content <- GZ.decompress $ BL.readFile filename
   let (_, _, r, c, unpackedData) = runGet deserialiseHeader content
   return (map (Image (fromIntegral r) (fromIntegral c)) unpackedData)
 
