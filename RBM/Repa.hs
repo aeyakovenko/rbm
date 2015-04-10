@@ -1,6 +1,11 @@
 module RBM.Repa(rbm
                ,learn
                ,energy
+               ,generate
+               ,BxI(..)
+               ,BxH(..)
+               ,HxB(..)
+               ,RBM
                ,perf
                ,test
                ) where
@@ -39,6 +44,7 @@ import System.Random(RandomGen
                     )
 
 import Control.Monad.Identity(runIdentity)
+import Control.DeepSeq(NFData, rnf)
 
 
 {--
@@ -59,6 +65,9 @@ data BxI = BxI { unBxI :: (Array U DIM2 Double)}
 data IxB = IxB { unIxB :: (Array U DIM2 Double)}
 data HxB = HxB { unHxB :: (Array U DIM2 Double)}
 data BxH = BxH { unBxH :: (Array U DIM2 Double)}
+
+instance NFData HxI where
+   rnf (HxI ar) = ar `R.deepSeqArray` ()
 
 weights :: RBM -> HxI
 weights wws = wws

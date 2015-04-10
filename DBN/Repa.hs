@@ -4,10 +4,11 @@ module DBN.Repa(dbn
                ,perf
                ,test
                ) where
-import Data.Mnist(readImages, toMatrix)
+import Data.Mnist(readImages, toMatrix, readLabels)
+import Data.List.Split(chunksOf)
 import qualified RBM.Repa as RBM
 import RBM.Repa(BxI(BxI)
-               ,BxH(unBxH)
+               ,HxB(unHxB)
                ,RBM
                ,rbm
                )
@@ -16,8 +17,10 @@ import qualified Data.Array.Repa.Algorithms.Matrix as R
 import Control.Applicative((<$>))
 import System.Random(RandomGen
                     ,split
+                    ,mkStdGen
                     )
 
+import Control.DeepSeq(deepseq)
 type DBN = [RBM]
 type PV = R.Array R.U R.DIM1 Double
 
@@ -40,8 +43,9 @@ learn _ [] _ = return []
 learn rand (rb:rest) batches = do 
    let (r1:r2:rn:_) = splits rand
    nrb <- RBM.learn r1 rb batches
-   nbs <- mapM (RBM.generate r2 nrb) batches
-   nrbms <- learn rn rest (map (BxI . unBxH) nbs)
+   nbs <- nrb `deepseq` (mapM (RBM.generate r2 nrb) batches)
+   nbs' <- (mapM (\ bb -> BxI <$> (R.transpose2P $ unHxB bb)) nbs)
+   nrbms <- learn rn rest nbs'
    return $ nrb : nrbms
 
 {--
@@ -57,8 +61,9 @@ generate _ [] pb = do
 
 generate rand (rb:rest) pb = do 
    let (r1:rn:_) = splits rand
-   nb <- RBM.BxI <$> RBM.unBxH <$> RBM.generate r1 rb pb
-   generate rn rest nb
+   hxb <- RBM.unHxB <$> RBM.generate r1 rb pb
+   bxi <- BxI <$> (R.transpose2P hxb)
+   generate rn rest bxi
 
 splits :: RandomGen r => r -> [r]
 splits rp = rc : splits rn
@@ -72,15 +77,17 @@ row (R.Z R.:. r R.:. _) = r
 test :: IO ()
 test = do 
    images <- readImages "mnist.pkl.gz"
-   labels <- readLabels "mnist.pkl.gz"
-   batches <- map toMatrix $ chunksOf 128 images
-   let gen = mkStdGen 0
+   --labels <- readLabels "mnist.pkl.gz"
+   let batches = take 1 $ map toMatrix $ chunksOf 1 images
+       gen = mkStdGen 0
        ds = dbn gen [784,500,500,10]
-   dl <- learn gen ds
-   (flip mapM_) [0..9] $ \ ix -> do
-       let batch = filter ((==) ix . fst) $ zip labels images
-       pv <- generate gen dl (toMatrix batch)
-      print (ix, R.toList pv1)
+   dl <- learn gen ds $ map BxI batches
+   pv <- generate gen dl $ head $ map BxI batches
+   print (R.toList pv)
+   --(flip mapM_) [0..9] $ \ ix -> do
+   --    let batch = filter ((==) ix . fst) $ zip labels images
+   --    pv <- generate gen dl (BxI $ toMatrix $ snd $ unzip batch)
+   --    print (ix, R.toList pv)
 
 perf :: IO ()
 perf = return ()

@@ -8,6 +8,7 @@ import Data.Word
 import qualified Data.List.Split as S
 import qualified Data.Array.Repa as R
 import Codec.Compression.GZip as GZ
+import Control.Applicative((<$>))
 
 data Image = Image {
       iRows :: Int
@@ -64,7 +65,7 @@ deserialiseLabels = do
 
 readLabels :: FilePath -> IO [Int]
 readLabels filename = do
-  content <- GZ.decompress $ BL.readFile filename
+  content <- GZ.decompress <$> BL.readFile filename
   let (_, _, labels) = runGet deserialiseLabels content
   return (map fromIntegral labels)
 
@@ -97,7 +98,7 @@ deserialiseHeader = do
 
 readImages :: FilePath -> IO [Image]
 readImages filename = do
-  content <- GZ.decompress $ BL.readFile filename
+  content <- GZ.decompress <$> BL.readFile filename
   let (_, _, r, c, unpackedData) = runGet deserialiseHeader content
   return (map (Image (fromIntegral r) (fromIntegral c)) unpackedData)
 
