@@ -52,4 +52,4 @@ Test-Suite test-DBN
                      zlib,
                      binary
 
-
+--hmatrix-mmap

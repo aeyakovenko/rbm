@@ -1,6 +1,6 @@
 hs_files=RBM/List.hs RBM/Repa.hs RBM/Proto.hs
 cabal_files=rbm.cabal
-tix_files=perf-repa-RBM.tix
+tix_files=perf-repa-RBM.tix test-DBN.tix
 
 all:dist/cabal.test.ok dist/cabal.build.ok
 
@@ -23,7 +23,16 @@ dist/setup-config:$(cabal_files) Makefile
 	cabal configure --enable-coverage --enable-tests
 	@touch $@
 
-mnist.pkl.gz:
-	wget http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz
+train-images-idx3-ubyte.gz:
+	wget http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz
+
+train-labels-idx1-ubyte.gz:
+	wget http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz
+
+t10k-images-idx3-ubyte.gz:
+	wget http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz
+
+t10k-labels-idx1-ubyte.gz:
+	wget http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz
 
 $$%:;@$(call true)$(info $(call or,$$$*))

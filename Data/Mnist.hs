@@ -1,4 +1,5 @@
 --from https://github.com/mhwombat/backprop-example/blob/master/Mnist.hs
+{-# LANGUAGE FlexibleInstances #-}
 module Data.Mnist (Image(..), normalisedData, readImages, readLabels, toMatrix)
   where
 
@@ -7,8 +8,11 @@ import Data.Binary.Get
 import Data.Word
 import qualified Data.List.Split as S
 import qualified Data.Array.Repa as R
-import Codec.Compression.GZip as GZ
 import Control.Applicative((<$>))
+import Codec.Compression.GZip as GZ
+import Data.List.Split(chunksOf)
+import Data.Packed.Vector.MMap as MM
+
 
 data Image = Image {
       iRows :: Int
@@ -101,4 +105,21 @@ readImages filename = do
   content <- GZ.decompress <$> BL.readFile filename
   let (_, _, r, c, unpackedData) = runGet deserialiseHeader content
   return (map (Image (fromIntegral r) (fromIntegral c)) unpackedData)
+
+writeArray :: String -> R.Array R.U R.DIM2 Double -> IO ()
+writeArray fileName array = do 
+   MM.writeVector fileName $ R.toUnboxed array
+
+readArray :: R.DIM2 -> String -> IO (R.Array R.U R.DIM2 Double)
+readArray sh fileName = do 
+   v <- MM.unsafeMMapVector fileName Nothing
+   return $ R.fromUnboxed sh v
+
+generateTrainBatches :: IO ()
+generateTrainBatches = do
+   images <- readImages "train-images-idx3-ubyte.gz"
+   let batches = map toMatrix $ chunksOf 128 images
+   (flip mapM_) (zip [0..] batches) $ \ (ix, bb) -> do
+      let name = "dist/train" ++ (show ix)
+      writeArray name bb 
 

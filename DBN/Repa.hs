@@ -74,20 +74,22 @@ row :: R.DIM2 -> Int
 row (R.Z R.:. r R.:. _) = r
 {-# INLINE row #-}
 
-test :: IO ()
-test = do 
-   images <- readImages "mnist.pkl.gz"
-   --labels <- readLabels "mnist.pkl.gz"
-   let batches = take 1 $ map toMatrix $ chunksOf 1 images
-       gen = mkStdGen 0
-       ds = dbn gen [784,500,500,10]
-   dl <- learn gen ds $ map BxI batches
-   pv <- generate gen dl $ head $ map BxI batches
-   print (R.toList pv)
-   --(flip mapM_) [0..9] $ \ ix -> do
-   --    let batch = filter ((==) ix . fst) $ zip labels images
-   --    pv <- generate gen dl (BxI $ toMatrix $ snd $ unzip batch)
-   --    print (ix, R.toList pv)
-
 perf :: IO ()
 perf = return ()
+
+test :: IO ()
+test = do 
+   labels <- readLabels "mnist.pkl"
+   print labels
+--   images <- readImages "mnist.pkl"
+--   let batches = take 1 $ map toMatrix $ chunksOf 2 images
+--       gen = mkStdGen 0
+--       ds = dbn gen [784,500,500,10]
+--   dl <- learn gen ds $ map BxI batches
+--   pv <- generate gen dl $ head $ map BxI batches
+--   print (R.toList pv)
+--   --(flip mapM_) [0..9] $ \ ix -> do
+--   --    let batch = filter ((==) ix . fst) $ zip labels images
+--   --    pv <- generate gen dl (BxI $ toMatrix $ snd $ unzip batch)
+--   --    print (ix, R.toList pv)
+
