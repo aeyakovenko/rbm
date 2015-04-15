@@ -11,19 +11,19 @@ tix_files=perf-repa-RBM.tix\
 
 all:dist/cabal.test.ok dist/cabal.build.ok
 
-dist/cabal.test.ok:$(hs_files) dist/setup-config
-	rm -f $(tix_files)
+dist/cabal.test.ok:$(hs_files) dist/setup-config clean_tix
 	cabal test 2>&1
-	rm -f $(tix_files)
 	@touch $@
 
-dist/cabal.build.ok:$(hs_files) dist/setup-config
+dist/cabal.build.ok:$(hs_files) dist/setup-config clean_tix
 	cabal build 2>&1
 	@touch $@
 
-clean:
-	rm -f $(tix_files)
+clean:clean_tix
 	cabal clean
+
+clean_tix:
+	rm -f $(tix_files)
 
 dist/setup-config:$(cabal_files) Makefile
 	cabal install --only-dependencies

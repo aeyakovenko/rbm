@@ -4,7 +4,7 @@ module DBN.Repa(dbn
                ,perf
                ,test
                ) where
-import Data.List.Split(chunksOf)
+
 import qualified RBM.Repa as RBM
 import RBM.Repa(BxI(BxI)
                ,HxB(unHxB)
@@ -40,14 +40,14 @@ dbn rand (ni:nh:rest) = rbm r1 ni nh : dbn r2 (nh:rest)
 {--
  - teach the dbn a batch of inputs
  --}
-learn :: (Functor m, Monad m, RandomGen r) => r -> DBN -> [BxI] -> m DBN
-learn _ [] _ = return []
-learn rand (rb:rest) batches = do 
+learn :: (Functor m, Monad m, RandomGen r) => r -> Double -> DBN -> [BxI] -> m DBN
+learn _ _ [] _ = return []
+learn rand rate (rb:rest) batches = do 
    let (r1:r2:rn:_) = splits rand
-   nrb <- RBM.learn r1 rb batches
+   nrb <- RBM.learn r1 rate rb batches
    nbs <- nrb `deepseq` (mapM (RBM.generate r2 nrb) batches)
    nbs' <- (mapM (\ bb -> BxI <$> (R.transpose2P $ unHxB bb)) nbs)
-   nrbms <- learn rn rest nbs'
+   nrbms <- learn rn rate rest nbs'
    return $ nrb : nrbms
 
 {--
@@ -84,11 +84,15 @@ test = do
    let
       gen = mkStdGen 0
       ds = dbn gen [784,500,500,10]
+      learnBatch :: DBN -> Int -> IO DBN
       learnBatch db ix = do
          let name = "dist/train" ++ (show ix)
          batch <- readArray name
          putStrLn $ "training: " ++ name
-         learn (mkStdGen ix) db [(BxI batch)]
+         dn <- learn (mkStdGen ix) 0.001 db [(BxI batch)]
+         testBatch dn 0
+         return dn
+      testBatch :: DBN -> Int -> IO ()
       testBatch db ix = do
          let name = "dist/test" ++ (show ix)
          b <- readArray name

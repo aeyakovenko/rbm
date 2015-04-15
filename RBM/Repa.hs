@@ -138,19 +138,20 @@ inputProbs wws hhs = do
 {-# INLINE inputProbs #-}
 
 -- update the rbm weights from each batch
-learn :: (Functor m, Monad m, RandomGen r) => r -> RBM -> [BxI]-> m RBM
-learn _ rb [] = return rb
-learn rand rb iis = do 
+learn :: (Functor m, Monad m, RandomGen r) => r -> Double -> RBM -> [BxI]-> m RBM
+learn _ _ rb [] = return rb
+learn rand rate rb iis = do 
    let (r1,r2) = split rand
-   nrb <- batch r1 rb (head iis)
-   (unHxI rb) `R.deepSeqArray` learn r2 nrb (tail iis)
+   nrb <- batch r1 rate rb (head iis)
+   (unHxI rb) `R.deepSeqArray` learn r2 rate nrb (tail iis)
 {-# INLINE learn #-}
 
 -- given a batch of unbiased inputs, update the rbm weights from the batch at once
-batch :: (Functor m, Monad m, RandomGen r) => r -> RBM -> BxI -> m RBM
-batch rand rb biased = do 
+batch :: (Functor m, Monad m, RandomGen r) => r -> Double -> RBM -> BxI -> m RBM
+batch rand rate rb biased = do 
    wd <- weightUpdate rand rb biased
-   HxI <$> (d2u $ (unHxI $ weights rb) +^ (unHxI wd))
+   let wd' = R.map ((*) rate) (unHxI wd)
+   HxI <$> (d2u $ (unHxI $ weights rb) +^ wd')
 {-# INLINE batch #-}
 
 -- given an unbiased input batch, generate the the RBM weight updates
@@ -261,7 +262,7 @@ prop_learned ni nh = runIdentity $ do
        fi ww = 1 + (fromIntegral ww)
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-   lrb <- learn (mr 1) rb [inputbatch]
+   lrb <- learn (mr 1) 1.0 rb [inputbatch]
    hxb <- generate (mr 3) lrb inputarr
    ixh <- IxH <$> (R.transpose2P $ unHxI lrb)
    bxh <- BxH <$> (R.transpose2P $ unHxB hxb)
@@ -275,7 +276,7 @@ prop_learn ni nh = runIdentity $ do
        rand = mkStdGen $ fi nh
        rb = rbm rand (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-   lrb <- learn rand rb [BxI inputs]
+   lrb <- learn rand 1.0 rb [BxI inputs]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_batch :: Word8 -> Word8 -> Word8 -> Bool
@@ -284,7 +285,7 @@ prop_batch ix ni nh = runIdentity $ do
        rand = mkStdGen $ fi ix
        inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
        fi ww = 1 + (fromIntegral ww)
-   lrb <- batch rand rb (BxI inputs)
+   lrb <- batch rand 1.0 rb (BxI inputs)
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
