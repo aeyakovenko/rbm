@@ -89,7 +89,10 @@ test = do
          batch <- readArray name
          putStrLn $ "training: " ++ name
          learn (mkStdGen ix) db [(BxI batch)]
+      testBatch db ix = do
+         let name = "dist/test" ++ (show ix)
+         b <- readArray name
+         pv <- generate gen db $ BxI b
+         print (ix, R.toList pv)
    de <- foldM learnBatch ds [0..468]
-   b1 <- readArray "dist/train0"
-   pv <- generate gen de $ BxI b1
-   print (R.toList pv)
+   mapM_ (testBatch de) [0..9] 
