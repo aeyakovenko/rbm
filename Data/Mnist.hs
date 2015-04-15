@@ -1,6 +1,6 @@
 --from https://github.com/mhwombat/backprop-example/blob/master/Mnist.hs
 {-# LANGUAGE FlexibleInstances #-}
-module Data.Mnist (generateTrainBatches, readArray)
+module Data.Mnist (generateTrainBatches, generateTestBatches, readArray)
   where
 
 import qualified Data.ByteString.Lazy as BL
@@ -67,8 +67,8 @@ deserialiseLabels = do
   let labels = BL.unpack labelData
   return (magicNumber, count, labels)
 
-_readLabels :: FilePath -> IO [Int]
-_readLabels filename = do
+readLabels :: FilePath -> IO [Int]
+readLabels filename = do
   content <- GZ.decompress <$> BL.readFile filename
   let (_, _, labels) = runGet deserialiseLabels content
   return (map fromIntegral labels)
@@ -122,5 +122,15 @@ generateTrainBatches = do
    let batches = map toMatrix $ chunksOf 128 images
    (flip mapM_) (zip [0::Integer ..] batches) $ \ (ix, bb) -> do
       let name = "dist/train" ++ (show ix)
+      writeArray name bb 
+
+generateTestBatches :: IO ()
+generateTestBatches = do
+   images <- readImages "t10k-images-idx3-ubyte.gz"
+   labels <- readLabels "t10k-labels-idx1-ubyte.gz"
+   (flip mapM_) ([0..9]) $ \ ix -> do
+      let name = "dist/test" ++ (show ix)
+      let batch = filter (((==) ix) . fst) $ zip labels images
+      let bb = toMatrix $ snd $ unzip batch 
       writeArray name bb 
 
