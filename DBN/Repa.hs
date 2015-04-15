@@ -18,8 +18,11 @@ import System.Random(RandomGen
                     ,split
                     ,mkStdGen
                     )
-
 import Control.DeepSeq(deepseq)
+
+import Data.Mnist(readArray)
+import Control.Monad(foldM)
+
 type DBN = [RBM]
 type PV = R.Array R.U R.DIM1 Double
 
@@ -77,16 +80,16 @@ perf :: IO ()
 perf = return ()
 
 test :: IO ()
-test = return ()
---   images <- readImages "mnist.pkl"
---   let batches = take 1 $ map toMatrix $ chunksOf 2 images
---       gen = mkStdGen 0
---       ds = dbn gen [784,500,500,10]
---   dl <- learn gen ds $ map BxI batches
---   pv <- generate gen dl $ head $ map BxI batches
---   print (R.toList pv)
---   --(flip mapM_) [0..9] $ \ ix -> do
---   --    let batch = filter ((==) ix . fst) $ zip labels images
---   --    pv <- generate gen dl (BxI $ toMatrix $ snd $ unzip batch)
---   --    print (ix, R.toList pv)
-
+test = do 
+   let
+      gen = mkStdGen 0
+      ds = dbn gen [784,500,500,10]
+      learnBatch db ix = do
+         let name = "dist/train" ++ (show ix)
+         batch <- readArray name
+         putStrLn $ "training: " ++ name
+         learn (mkStdGen ix) db [(BxI batch)]
+   de <- foldM learnBatch ds [0..468]
+   b1 <- readArray "dist/train0"
+   pv <- generate gen de $ BxI b1
+   print (R.toList pv)

@@ -1,6 +1,6 @@
 --from https://github.com/mhwombat/backprop-example/blob/master/Mnist.hs
 {-# LANGUAGE FlexibleInstances #-}
-module Data.Mnist (generateTrainBatches)
+module Data.Mnist (generateTrainBatches, readArray)
   where
 
 import qualified Data.ByteString.Lazy as BL
@@ -111,8 +111,8 @@ writeArray fileName array = do
    let (R.Z R.:. r R.:. c) = R.extent array
    B.encodeFile fileName (r,c,R.toList array)
 
-_readArray ::String -> IO (R.Array R.U R.DIM2 Double)
-_readArray fileName = do 
+readArray ::String -> IO (R.Array R.U R.DIM2 Double)
+readArray fileName = do 
    (r,c,ls) <- B.decodeFile fileName
    return $ R.fromListUnboxed  (R.Z R.:. r R.:. c) ls
 
