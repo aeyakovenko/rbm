@@ -51,18 +51,19 @@ energy rb inputs = negate ee
       ee = hhs `deepseq` sum $ zipWith (*) wws [inp * hid | inp <- biased , hid <- hhs]
 
 -- update the rbm weights from each batch
-learn :: RandomGen r => r -> RBM -> [[[Double]]] -> RBM
-learn _ rb [] = rb
-learn rand rb iis = nrb `deepseq` learn r2 nrb (tail iis)
+learn :: RandomGen r => r -> Double -> RBM -> [[[Double]]] -> RBM
+learn _ _ rb [] = rb
+learn rand rate rb iis = nrb `deepseq` learn r2 rate nrb (tail iis)
    where
       (r1,r2) = split rand
-      nrb = batch r1 rb (head iis)
+      nrb = batch r1 rate rb (head iis)
 
 -- given a batch of biased inputs, update the rbm weights from the batch at once 
-batch :: RandomGen r => r -> RBM -> [[Double]] -> RBM
-batch rand rb inputs = rb { weights = uw }
+batch :: RandomGen r => r -> Double -> RBM -> [[Double]] -> RBM
+batch rand rate rb inputs = rb { weights = uw }
    where
-      uw = zipWith (+) (weights rb) wd
+      uw = zipWith (+) (weights rb) wd'
+      wd' = map ((*) rate) wd
       wd = weightUpdatesLoop rand rb inputs (take len [0..])
       len = (numInputs rb) * (numHidden rb)
 
@@ -150,31 +151,42 @@ tensor xxs yys = [ (xx*yy) | xx <- xxs, yy<-yys]
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 
--- tests
-
 -- test to see if we can learn a random string
-prop_learned :: Word8 -> Word8 -> Bool
-prop_learned ni' nh' = (tail regened) == (tail input)
+run_prop_learned :: Double -> Int -> Int -> Bool
+run_prop_learned rate ni' nh' = (tail regened) == (tail input)
    where
       regened = regenerate (mr 2) lrb $ generate (mr 3) lrb input
       --learn the inputs
-      lrb = learn (mr 1) rb [inputs]
+      lrb = learn (mr 1) rate rb [inputs]
       rb = rbm (mr 0) ni nh
       inputs = replicate 2000 $ input
       --convert a random list of its 0 to 1 to doubles
-      input = map fromIntegral $ take ni $ 1:(randomRs (0::Int,1::Int) (mr 4))
+      isSame ls = maximum ls == minimum ls
+      geninputs = head $ dropWhile isSame $ chunksOf ni $ randomRs (0::Int,1::Int) (mr 4)
+      input = map fromIntegral $ take ni $ 1:geninputs
       ni = fi ni'
       nh = fi nh'
       --creates a random number generator with a seed
       mr i = mkStdGen (ni + nh + i)
       fi ii = 1 + (fromIntegral ii)
 
+prop_learned :: Word8 -> Word8 -> Bool
+prop_learned ni nh = run_prop_learned 1.0 (fi ni) (fi nh)
+   where
+      fi ii = (fromIntegral ii)
+
+prop_notlearned :: Word8 -> Word8 -> Bool
+prop_notlearned ni nh = not $ run_prop_learned (-1.0) (fi ni) (fi nh)
+   where
+      fi ii = 1 + (fromIntegral ii)
+
+
 prop_learn :: Word8 -> Word8 -> Bool
 prop_learn ni nh = ln == (length $ weights $ lrb)
    where
       ln = (fi ni) * (fi nh)
       lrb = learn' rb 1
-      learn' rr ix = learn (mkStdGen ix) rr [[(take (fi ni) $ cycle [0,1])]]
+      learn' rr ix = learn (mkStdGen ix) 1.0 rr [[(take (fi ni) $ cycle [0,1])]]
       rb = rbm (mkStdGen 0) (fi ni) (fi nh)
       fi ii = 1 + fromIntegral ii
 
@@ -182,7 +194,7 @@ prop_batch :: Word8 -> Word8 -> Word8 -> Bool
 prop_batch ix ni nh = ln == (length $ weights $ lrb)
    where
       ln = (fi ni) * (fi nh)
-      lrb = batch rand rb inputs
+      lrb = batch rand 1.0 rb inputs
       rb = rbm rand (fi ni) (fi nh)
       rand = mkStdGen ln
       inputs = replicate (fi ix) $ take (fi ni) $ cycle [0,1]
@@ -256,6 +268,7 @@ test = do
    runtest "learn"    prop_learn
    runtest "batch"    prop_batch
    runtest "learned"  prop_learned
+   runtest "notlearned"  prop_notlearned
 
 perf :: IO ()
 perf = do

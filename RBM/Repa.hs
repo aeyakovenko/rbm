@@ -252,8 +252,8 @@ mmultP arr brr
 -- tests
 
 -- test to see if we can learn a random string
-prop_learned :: Word8 -> Word8 -> Bool
-prop_learned ni nh = runIdentity $ do
+run_prop_learned :: Double -> Word8 -> Word8 -> Bool
+run_prop_learned rate ni nh = runIdentity $ do
    let rb = rbm (mr 0) (fi ni) (fi nh)
        inputbatchL = concat $ replicate batchsz inputlst
        inputbatch = BxI $ R.fromListUnboxed (Z:. batchsz :.fi ni) $ inputbatchL
@@ -262,13 +262,19 @@ prop_learned ni nh = runIdentity $ do
        fi ww = 1 + (fromIntegral ww)
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-   lrb <- learn (mr 1) 1.0 rb [inputbatch]
+   lrb <- learn (mr 1) rate rb [inputbatch]
    hxb <- generate (mr 3) lrb inputarr
    ixh <- IxH <$> (R.transpose2P $ unHxI lrb)
    bxh <- BxH <$> (R.transpose2P $ unHxB hxb)
    ixb <- regenerate (mr 2) ixh bxh
    bxi <- BxI <$> (R.transpose2P $ unIxB ixb)
    return $ (tail $ R.toList $ unBxI $ bxi) == (tail $ R.toList $ unBxI $ inputarr)
+
+prop_learned :: Word8 -> Word8 -> Bool
+prop_learned ni nh = run_prop_learned 1.0 ni nh
+
+prop_didnotlearn :: Word8 -> Word8 -> Bool
+prop_didnotlearn ni nh = run_prop_learned 0.0 (ni + 2) (nh + 2)
 
 prop_learn :: Word8 -> Word8 -> Bool
 prop_learn ni nh = runIdentity $ do
@@ -352,15 +358,16 @@ test = do
    let check rr = if (isSuccess rr) then return () else exitFailure
        cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
        runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
-   runtest "init"     prop_init
-   runtest "energy"   prop_energy
-   runtest "hiddenp"  prop_hiddenProbs
-   runtest "hiddenp2" prop_hiddenProbs2
-   runtest "inputp"   prop_inputProbs
-   runtest "inputp2"  prop_inputProbs2
-   runtest "batch"    prop_batch
-   runtest "learn"    prop_learn
-   runtest "learned"  prop_learned
+   runtest "init"         prop_init
+   runtest "energy"       prop_energy
+   runtest "hiddenp"      prop_hiddenProbs
+   runtest "hiddenp2"     prop_hiddenProbs2
+   runtest "inputp"       prop_inputProbs
+   runtest "inputp2"      prop_inputProbs2
+   runtest "batch"        prop_batch
+   runtest "learn"        prop_learn
+   runtest "learned"      prop_learned
+   runtest "didnotlearn"  prop_didnotlearn
 
 perf :: IO ()
 perf = do
