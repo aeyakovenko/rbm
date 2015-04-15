@@ -89,7 +89,7 @@ test = do
          let name = "dist/train" ++ (show ix)
          batch <- readArray name
          putStrLn $ "training: " ++ name
-         dn <- learn (mkStdGen ix) 0.001 db [(BxI batch)]
+         dn <- learn (mkStdGen ix) 0.00001 db [(BxI batch)]
          testBatch dn 0
          return dn
       testBatch :: DBN -> Int -> IO ()

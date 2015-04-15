@@ -19,10 +19,10 @@ dist/cabal.build.ok:$(hs_files) dist/setup-config clean_tix
 	cabal build 2>&1
 	@touch $@
 
-clean:clean_tix
+clean:tix
 	cabal clean
 
-clean_tix:
+tix:
 	rm -f $(tix_files)
 
 dist/setup-config:$(cabal_files) Makefile
