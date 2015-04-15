@@ -4,7 +4,6 @@ module DBN.Repa(dbn
                ,perf
                ,test
                ) where
-import Data.Mnist(readImages, toMatrix, readLabels)
 import Data.List.Split(chunksOf)
 import qualified RBM.Repa as RBM
 import RBM.Repa(BxI(BxI)
@@ -78,9 +77,7 @@ perf :: IO ()
 perf = return ()
 
 test :: IO ()
-test = do 
-   labels <- readLabels "mnist.pkl"
-   print labels
+test = return ()
 --   images <- readImages "mnist.pkl"
 --   let batches = take 1 $ map toMatrix $ chunksOf 2 images
 --       gen = mkStdGen 0

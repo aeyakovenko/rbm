@@ -1,17 +1,17 @@
 --from https://github.com/mhwombat/backprop-example/blob/master/Mnist.hs
 {-# LANGUAGE FlexibleInstances #-}
-module Data.Mnist (Image(..), normalisedData, readImages, readLabels, toMatrix)
+module Data.Mnist (generateTrainBatches)
   where
 
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Get
+import qualified Data.Binary as B
 import Data.Word
 import qualified Data.List.Split as S
 import qualified Data.Array.Repa as R
 import Control.Applicative((<$>))
 import Codec.Compression.GZip as GZ
 import Data.List.Split(chunksOf)
-import Data.Packed.Vector.MMap as MM
 
 
 data Image = Image {
@@ -24,7 +24,7 @@ toMatrix :: [Image] -> R.Array R.U R.DIM2 Double
 toMatrix images = m
   where 
         m = R.fromListUnboxed (R.Z R.:. len R.:. maxsz) (concatMap pixels images)
-        maxsz = 28 * 28
+        maxsz = maximum $ map (\ ii -> (iRows ii) * (iColumns ii)) images
         len = length images
         pixels im = take maxsz $ (map fromIntegral (iPixels im)) ++ [0..]
 
@@ -36,8 +36,8 @@ toColumnVector i = (r><1) q :: Matrix Double
         q = map normalise p
 -}
 
-normalisedData :: Image -> [Double]
-normalisedData image = map normalisePixel (iPixels image)
+_normalisedData :: Image -> [Double]
+_normalisedData image = map normalisePixel (iPixels image)
 
 --normalisedData :: Image -> [Double]
 --normalisedData i = map (/m) x 
@@ -67,8 +67,8 @@ deserialiseLabels = do
   let labels = BL.unpack labelData
   return (magicNumber, count, labels)
 
-readLabels :: FilePath -> IO [Int]
-readLabels filename = do
+_readLabels :: FilePath -> IO [Int]
+_readLabels filename = do
   content <- GZ.decompress <$> BL.readFile filename
   let (_, _, labels) = runGet deserialiseLabels content
   return (map fromIntegral labels)
@@ -108,18 +108,19 @@ readImages filename = do
 
 writeArray :: String -> R.Array R.U R.DIM2 Double -> IO ()
 writeArray fileName array = do 
-   MM.writeVector fileName $ R.toUnboxed array
+   let (R.Z R.:. r R.:. c) = R.extent array
+   B.encodeFile fileName (r,c,R.toList array)
 
-readArray :: R.DIM2 -> String -> IO (R.Array R.U R.DIM2 Double)
-readArray sh fileName = do 
-   v <- MM.unsafeMMapVector fileName Nothing
-   return $ R.fromUnboxed sh v
+_readArray ::String -> IO (R.Array R.U R.DIM2 Double)
+_readArray fileName = do 
+   (r,c,ls) <- B.decodeFile fileName
+   return $ R.fromListUnboxed  (R.Z R.:. r R.:. c) ls
 
 generateTrainBatches :: IO ()
 generateTrainBatches = do
    images <- readImages "train-images-idx3-ubyte.gz"
    let batches = map toMatrix $ chunksOf 128 images
-   (flip mapM_) (zip [0..] batches) $ \ (ix, bb) -> do
+   (flip mapM_) (zip [0::Integer ..] batches) $ \ (ix, bb) -> do
       let name = "dist/train" ++ (show ix)
       writeArray name bb 
 
