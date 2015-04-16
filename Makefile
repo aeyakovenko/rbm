@@ -11,11 +11,11 @@ tix_files=perf-repa-RBM.tix\
 
 all:dist/cabal.test.ok dist/cabal.build.ok
 
-dist/cabal.test.ok:$(hs_files) dist/setup-config clean_tix
+dist/cabal.test.ok:$(hs_files) dist/setup-config tix
 	cabal test 2>&1
 	@touch $@
 
-dist/cabal.build.ok:$(hs_files) dist/setup-config clean_tix
+dist/cabal.build.ok:$(hs_files) dist/setup-config tix
 	cabal build 2>&1
 	@touch $@
 

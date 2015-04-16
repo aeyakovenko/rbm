@@ -18,6 +18,7 @@ import System.Exit (exitFailure)
 import Test.QuickCheck(verboseCheckWithResult)
 import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
+import Data.List.Split(chunksOf)
 --impl modules
 import Control.Applicative((<$>))
 import Data.Array.Repa(Array
@@ -252,13 +253,16 @@ mmultP arr brr
 -- tests
 
 -- test to see if we can learn a random string
-run_prop_learned :: Double -> Word8 -> Word8 -> Bool
+run_prop_learned :: Double -> Int -> Int -> ([Double],[Double])
 run_prop_learned rate ni nh = runIdentity $ do
    let rb = rbm (mr 0) (fi ni) (fi nh)
        inputbatchL = concat $ replicate batchsz inputlst
        inputbatch = BxI $ R.fromListUnboxed (Z:. batchsz :.fi ni) $ inputbatchL
        inputarr = BxI $ R.fromListUnboxed (Z:. 1 :. fi ni) $ inputlst
-       inputlst = take (fi ni) $ map fromIntegral $ randomRs (0::Int,1::Int) (mr 4)
+       isSame ls = maximum ls == minimum ls
+       add1 ls = take (fi ni) $ 1:ls
+       geninputs = map fromIntegral $ randomRs (0::Int,1::Int) (mr 4)
+       inputlst = map fromIntegral $ take (fi ni) $ 1:geninputs
        fi ww = 1 + (fromIntegral ww)
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
@@ -268,14 +272,19 @@ run_prop_learned rate ni nh = runIdentity $ do
    bxh <- BxH <$> (R.transpose2P $ unHxB hxb)
    ixb <- regenerate (mr 2) ixh bxh
    bxi <- BxI <$> (R.transpose2P $ unIxB ixb)
-   return $ (tail $ R.toList $ unBxI $ bxi) == (tail $ R.toList $ unBxI $ inputarr)
+   return $ ((tail $ R.toList $ unBxI $ bxi), (tail $ R.toList $ unBxI $ inputarr))
 
 prop_learned :: Word8 -> Word8 -> Bool
-prop_learned ni nh = run_prop_learned 1.0 ni nh
+prop_learned ni nh = (uncurry (==)) $ run_prop_learned 1.0 (fi ni) (fi nh)
+   where
+      fi = fromIntegral
 
-prop_didnotlearn :: Word8 -> Word8 -> Bool
-prop_didnotlearn ni nh = run_prop_learned 0.0 (ni + 2) (nh + 2)
-
+prop_not_learned :: Word8 -> Word8 -> Bool
+prop_not_learned ni nh = (uncurry test) $ run_prop_learned (-1.0) (fi ni) (fi nh)
+   where
+      fi ii = fromIntegral ii
+      test aas bbs = (null aas) || (aas /= bbs) || (minimum aas == 1.0)
+   
 prop_learn :: Word8 -> Word8 -> Bool
 prop_learn ni nh = runIdentity $ do
    let inputs = R.fromListUnboxed (Z:.fi nh:.fi ni) $ take ((fi ni) * (fi nh)) $ cycle [0,1]
@@ -367,7 +376,7 @@ test = do
    runtest "batch"        prop_batch
    runtest "learn"        prop_learn
    runtest "learned"      prop_learned
-   runtest "didnotlearn"  prop_didnotlearn
+   runtest "notlearnred"  prop_not_learned
 
 perf :: IO ()
 perf = do

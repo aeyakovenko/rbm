@@ -161,8 +161,7 @@ run_prop_learned rate ni' nh' = (tail regened) == (tail input)
       rb = rbm (mr 0) ni nh
       inputs = replicate 2000 $ input
       --convert a random list of its 0 to 1 to doubles
-      isSame ls = maximum ls == minimum ls
-      geninputs = head $ dropWhile isSame $ chunksOf ni $ randomRs (0::Int,1::Int) (mr 4)
+      geninputs = randomRs (0::Int,1::Int) (mr 4)
       input = map fromIntegral $ take ni $ 1:geninputs
       ni = fi ni'
       nh = fi nh'
@@ -175,8 +174,8 @@ prop_learned ni nh = run_prop_learned 1.0 (fi ni) (fi nh)
    where
       fi ii = (fromIntegral ii)
 
-prop_notlearned :: Word8 -> Word8 -> Bool
-prop_notlearned ni nh = not $ run_prop_learned (-1.0) (fi ni) (fi nh)
+prop_not_learned :: Word8 -> Word8 -> Bool
+prop_not_learned ni nh = not $ run_prop_learned (-1.0) (fi ni) (fi nh)
    where
       fi ii = 1 + (fromIntegral ii)
 
@@ -268,7 +267,7 @@ test = do
    runtest "learn"    prop_learn
    runtest "batch"    prop_batch
    runtest "learned"  prop_learned
-   runtest "notlearned"  prop_notlearned
+   runtest "notlearned"  prop_not_learned
 
 perf :: IO ()
 perf = do
