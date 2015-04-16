@@ -7,6 +7,7 @@ hs_files=RBM/List.hs\
 
 tix_files=perf-repa-RBM.tix\
 			 trainbatches.tix\
+			 testbatches.tix\
 			 test-DBN.tix
 
 all:dist/cabal.test.ok dist/cabal.build.ok
@@ -25,6 +26,16 @@ clean:tix
 test:tix
 	cabal build test-DBN
 	./dist/build/test-DBN/test-DBN +RTS -N8
+
+batches:tix
+	cabal build testbatches
+	cabal build trainbatches
+	rm dist/test* || echo ok
+	rm dist/train* || echo ok
+	./dist/build/trainbatches/trainbatches
+	rm -f $(tix_files)
+	./dist/build/testbatches/testbatches
+	rm -f $(tix_files)
 
 tix:
 	rm -f $(tix_files)

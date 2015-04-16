@@ -24,9 +24,9 @@ toMatrix :: [Image] -> R.Array R.U R.DIM2 Double
 toMatrix images = m
   where 
         m = R.fromListUnboxed (R.Z R.:. len R.:. maxsz) (concatMap pixels images)
-        maxsz = maximum $ map (\ ii -> (iRows ii) * (iColumns ii)) images
+        maxsz = 1 + (maximum $ map (\ ii -> (iRows ii) * (iColumns ii)) images)
         len = length images
-        pixels im = take maxsz $ (normalisedData im) ++ [0..]
+        pixels im = take maxsz $ 1:((normalisedData im) ++ [0..])
 
 {-
 toColumnVector :: Image -> Matrix Double

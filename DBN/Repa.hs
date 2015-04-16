@@ -63,7 +63,8 @@ generate rand (rb:rest) pb = do
    ixb <- R.transpose2P $ RBM.unBxI pb
    sums <- R.sumP ixb
    probs <- R.computeUnboxedP $ R.map (prob pb) sums
-   print (R.toList probs)
+   let ls = R.toList probs
+   print (length ls, ls)
 
    let (r1:rn:_) = splits rand
    hxb <- RBM.unHxB <$> RBM.generate r1 rb pb
@@ -89,13 +90,13 @@ test :: IO ()
 test = do 
    let
       gen = mkStdGen 0
-      ds = dbn gen [784,500,500,10]
+      ds = dbn gen [785,501,501,11]
       learnBatch :: DBN -> Int -> IO DBN
       learnBatch db ix = do
          let name = "dist/train" ++ (show ix)
          batch <- readArray name
          putStrLn $ "training: " ++ name
-         dn <- learn (mkStdGen ix) 0.01 db [(BxI batch)]
+         dn <- learn (mkStdGen ix) 1 db [(BxI batch)]
          testBatch dn 0
          return dn
       testBatch :: DBN -> Int -> IO ()
