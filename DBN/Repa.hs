@@ -89,7 +89,7 @@ test = do
          let name = "dist/train" ++ (show ix)
          batch <- readArray name
          putStrLn $ "training: " ++ name
-         dn <- learn (mkStdGen ix) 0.0 db [(BxI batch)]
+         dn <- learn (mkStdGen ix) 0.01 db [(BxI batch)]
          testBatch dn 0
          return dn
       testBatch :: DBN -> Int -> IO ()
@@ -98,5 +98,5 @@ test = do
          b <- readArray name
          pv <- generate gen db $ BxI b
          print (ix, R.toList pv)
-   de <- foldM learnBatch ds [0..468]
+   de <- foldM learnBatch ds [0,0..]
    mapM_ (testBatch de) [0..9] 
