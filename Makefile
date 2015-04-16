@@ -22,6 +22,10 @@ dist/cabal.build.ok:$(hs_files) dist/setup-config tix
 clean:tix
 	cabal clean
 
+test:tix
+	cabal build test-DBN
+	./dist/build/test-DBN/test-DBN +RTS -N8
+
 tix:
 	rm -f $(tix_files)
 

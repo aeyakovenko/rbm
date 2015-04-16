@@ -26,7 +26,7 @@ toMatrix images = m
         m = R.fromListUnboxed (R.Z R.:. len R.:. maxsz) (concatMap pixels images)
         maxsz = maximum $ map (\ ii -> (iRows ii) * (iColumns ii)) images
         len = length images
-        pixels im = take maxsz $ (map fromIntegral (iPixels im)) ++ [0..]
+        pixels im = take maxsz $ (normalisedData im) ++ [0..]
 
 {-
 toColumnVector :: Image -> Matrix Double
@@ -36,8 +36,8 @@ toColumnVector i = (r><1) q :: Matrix Double
         q = map normalise p
 -}
 
-_normalisedData :: Image -> [Double]
-_normalisedData image = map normalisePixel (iPixels image)
+normalisedData :: Image -> [Double]
+normalisedData image = map normalisePixel (iPixels image)
 
 --normalisedData :: Image -> [Double]
 --normalisedData i = map (/m) x 

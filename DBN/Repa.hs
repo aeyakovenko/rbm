@@ -53,19 +53,25 @@ learn rand rate (rb:rest) batches = do
 {--
  - generate a probablity vector
  --}
-generate :: (Functor m, Monad m, RandomGen r) => r -> DBN -> BxI -> m PV
+generate :: (RandomGen r) => r -> DBN -> BxI -> IO PV
 generate _ [] pb = do
-   let prob :: Double -> Double
-       prob xx = xx / (fromIntegral $ row $ R.extent $ RBM.unBxI pb)
    ixb <- R.transpose2P $ RBM.unBxI pb
    sums <- R.sumP ixb
-   R.computeUnboxedP $ R.map prob sums
+   R.computeUnboxedP $ R.map (prob pb) sums
 
 generate rand (rb:rest) pb = do 
+   ixb <- R.transpose2P $ RBM.unBxI pb
+   sums <- R.sumP ixb
+   probs <- R.computeUnboxedP $ R.map (prob pb) sums
+   print (R.toList probs)
+
    let (r1:rn:_) = splits rand
    hxb <- RBM.unHxB <$> RBM.generate r1 rb pb
    bxi <- BxI <$> (R.transpose2P hxb)
    generate rn rest bxi
+
+prob :: BxI -> Double -> Double
+prob pb xx = xx / (fromIntegral $ row $ R.extent $ RBM.unBxI pb)
 
 splits :: RandomGen r => r -> [r]
 splits rp = rc : splits rn
@@ -98,5 +104,5 @@ test = do
          b <- readArray name
          pv <- generate gen db $ BxI b
          print (ix, R.toList pv)
-   de <- foldM learnBatch ds [0,0..]
+   de <- foldM learnBatch ds [0..468]
    mapM_ (testBatch de) [0..9] 
