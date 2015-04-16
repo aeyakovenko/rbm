@@ -18,7 +18,6 @@ import System.Exit (exitFailure)
 import Test.QuickCheck(verboseCheckWithResult)
 import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
-import Data.List.Split(chunksOf)
 --impl modules
 import Control.Applicative((<$>))
 import Data.Array.Repa(Array
@@ -259,11 +258,9 @@ run_prop_learned rate ni nh = runIdentity $ do
        inputbatchL = concat $ replicate batchsz inputlst
        inputbatch = BxI $ R.fromListUnboxed (Z:. batchsz :.fi ni) $ inputbatchL
        inputarr = BxI $ R.fromListUnboxed (Z:. 1 :. fi ni) $ inputlst
-       isSame ls = maximum ls == minimum ls
-       add1 ls = take (fi ni) $ 1:ls
-       geninputs = map fromIntegral $ randomRs (0::Int,1::Int) (mr 4)
+       geninputs = randomRs (0::Int,1::Int) (mr 4)
        inputlst = map fromIntegral $ take (fi ni) $ 1:geninputs
-       fi ww = 1 + (fromIntegral ww)
+       fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
    lrb <- learn (mr 1) rate rb [inputbatch]
@@ -280,10 +277,10 @@ prop_learned ni nh = (uncurry (==)) $ run_prop_learned 1.0 (fi ni) (fi nh)
       fi = fromIntegral
 
 prop_not_learned :: Word8 -> Word8 -> Bool
-prop_not_learned ni nh = (uncurry test) $ run_prop_learned (-1.0) (fi ni) (fi nh)
+prop_not_learned ni nh = (uncurry check) $ run_prop_learned (-1.0) (fi ni) (fi nh)
    where
       fi ii = fromIntegral ii
-      test aas bbs = (null aas) || (aas /= bbs) || (minimum aas == 1.0)
+      check aas bbs = (null aas) || (aas /= bbs) || (minimum aas == 1.0)
    
 prop_learn :: Word8 -> Word8 -> Bool
 prop_learn ni nh = runIdentity $ do
