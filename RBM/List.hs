@@ -152,8 +152,8 @@ sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 
 -- test to see if we can learn a random string
-run_prop_learned :: Double -> Int -> Int -> Bool
-run_prop_learned rate ni' nh' = (tail regened) == (tail input)
+run_prop_learned :: Double -> Int -> Int -> ([Double],[Double])
+run_prop_learned rate ni' nh' = ((tail regened), (tail input))
    where
       regened = regenerate (mr 2) lrb $ generate (mr 3) lrb input
       --learn the inputs
@@ -170,14 +170,15 @@ run_prop_learned rate ni' nh' = (tail regened) == (tail input)
       fi ii = 1 + (fromIntegral ii)
 
 prop_learned :: Word8 -> Word8 -> Bool
-prop_learned ni nh = run_prop_learned 1.0 (fi ni) (fi nh)
+prop_learned ni nh = (uncurry (==)) $ run_prop_learned 1.0 (fi ni) (fi nh)
    where
       fi ii = (fromIntegral ii)
 
 prop_not_learned :: Word8 -> Word8 -> Bool
-prop_not_learned ni nh = not $ run_prop_learned (-1.0) (fi ni) (fi nh)
+prop_not_learned ni nh = (uncurry check) $ run_prop_learned (-1.0) (fi ni) (fi nh)
    where
-      fi ii = 1 + (fromIntegral ii)
+      fi ii = fromIntegral ii
+      check aas bbs = (null aas) || (aas /= bbs) || (minimum aas == 1.0)
 
 
 prop_learn :: Word8 -> Word8 -> Bool
