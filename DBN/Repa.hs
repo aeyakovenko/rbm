@@ -3,11 +3,16 @@ module DBN.Repa(dbn
                ,generate
                ,perf
                ,test
+               ,mnist
                ) where
 
 import qualified RBM.Repa as RBM
-import RBM.Repa(BxI(BxI)
-               ,HxB(unHxB)
+import RBM.Repa(BxI(BxI,unBxI)
+               ,HxB(HxB,unHxB)
+               ,BxH(BxH,unBxH)
+               ,IxH(IxH,unIxH)
+               ,HxI(HxI,unHxI)
+               ,IxB(IxB,unIxB)
                ,RBM
                ,rbm
                )
@@ -20,8 +25,20 @@ import System.Random(RandomGen
                     )
 import Control.DeepSeq(deepseq)
 
+import System.Exit (exitFailure)
+import Test.QuickCheck(verboseCheckWithResult)
+import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
+import Data.Word(Word8)
 import Data.Mnist(readArray)
 import Control.Monad(foldM)
+import Control.Monad.Identity(runIdentity)
+import System.Random(RandomGen
+                    ,random
+                    ,randomRs
+                    ,mkStdGen
+                    ,split
+                    )
+
 
 type DBN = [RBM]
 type PV = R.Array R.U R.DIM1 Double
@@ -51,28 +68,50 @@ learn rand rate (rb:rest) batches = do
    return $ nrb : nrbms
 
 {--
- - generate a probablity vector
+ - generate a batch of output
  --}
-generate :: (RandomGen r) => r -> DBN -> BxI -> IO PV
-generate _ [] pb = do
-   ixb <- R.transpose2P $ RBM.unBxI pb
-   sums <- R.sumP ixb
-   R.computeUnboxedP $ R.map (prob pb) sums
+generate :: (Functor m, Monad m, RandomGen r) => r -> DBN -> BxI -> m BxH
+generate _ [] pb = return $ RBM.BxH $ RBM.unBxI pb
 
 generate rand (rb:rest) pb = do 
-   ixb <- R.transpose2P $ RBM.unBxI pb
-   sums <- R.sumP ixb
-   probs <- R.computeUnboxedP $ R.map (prob pb) sums
-   let ls = R.toList probs
-   print (length ls, ls)
-
    let (r1:rn:_) = splits rand
    hxb <- RBM.unHxB <$> RBM.generate r1 rb pb
    bxi <- BxI <$> (R.transpose2P hxb)
    generate rn rest bxi
+{-# INLINE generate #-}
 
-prob :: BxI -> Double -> Double
-prob pb xx = xx / (fromIntegral $ row $ R.extent $ RBM.unBxI pb)
+{--
+ - regenerate a batch of input
+ --}
+regenerate :: (Functor m, Monad m, RandomGen r) => r -> DBN -> BxH -> m BxI
+regenerate r dbn bxh = regenerate' r (reverse dbn) bxh
+{-# INLINE regenerate #-}
+
+regenerate' :: (Functor m, Monad m, RandomGen r) => r -> DBN -> BxH ->  m BxI
+regenerate' _ [] pb = return $ RBM.BxI $ RBM.unBxH pb
+
+regenerate' rand (rb:rest) pb = do 
+   let (r1:rn:_) = splits rand
+   ixh <- IxH <$> R.transpose2P (unHxI rb)
+   ixb <- RBM.unIxB <$> RBM.regenerate r1 ixh pb
+   bxh <- BxH <$> (R.transpose2P ixb)
+   regenerate' rn rest bxh
+{-# INLINE regenerate' #-}
+
+{--
+ - given a batch of generated hidden nodes
+ - calculate the probability of each node being one
+ - basically, a way to sample the probability if the batch 
+ - from the same class of inputs
+ --}
+probV :: Monad m => HxB -> m PV 
+probV hxb = do 
+   sums <- R.sumP (RBM.unHxB hxb)
+   let nb = R.col $ R.extent $ RBM.unHxB hxb
+   R.computeUnboxedP $ R.map (prob nb) sums
+
+prob :: Int -> Double -> Double
+prob nb xx = xx / (fromIntegral nb)
 
 splits :: RandomGen r => r -> [r]
 splits rp = rc : splits rn
@@ -83,11 +122,50 @@ row :: R.DIM2 -> Int
 row (R.Z R.:. r R.:. _) = r
 {-# INLINE row #-}
 
+-- test to see if we can learn a random string
+run_prop_learned :: Double -> Int -> Int -> Int -> ([Double],[Double])
+run_prop_learned rate ni nd nh = runIdentity $ do
+   let rb = dbn (mr 0) layers
+       nmin = ni `min` nh
+       nmax = ni `max` nh
+       layers = (fi ni) : (take (fi nd) ((randomRs (nmin,nmax)) (mr 5))) ++ [nh]
+       inputbatchL = concat $ replicate batchsz inputlst
+       inputbatch = BxI $ R.fromListUnboxed (R.Z R.:. batchsz R.:. fi ni) $ inputbatchL
+       inputarr = BxI $ R.fromListUnboxed (R.Z R.:. 1 R.:. fi ni) $ inputlst
+       geninputs = randomRs (0::Int,1::Int) (mr 4)
+       inputlst = map fromIntegral $ take (fi ni) $ 1:geninputs
+       fi ww = 1 + ww
+       mr i = mkStdGen (fi ni + fi nh + i)
+       batchsz = 2000
+   lbn <- learn (mr 1) rate rb [inputbatch]
+   bxh <- generate (mr 3) lbn inputarr
+   bxi <- regenerate (mr 2) lbn bxh
+   return $ ((tail $ R.toList $ unBxI $ bxi), (tail $ R.toList $ unBxI $ inputarr))
+
+prop_learned :: Word8 -> Word8 -> Bool
+prop_learned ni nh = (uncurry (==)) $ run_prop_learned 1.0 (fi ni) 2 (fi nh)
+   where
+      fi = fromIntegral
+
+prop_not_learned :: Word8 -> Word8 -> Bool
+prop_not_learned ni nh = (uncurry check) $ run_prop_learned (-1.0) (fi ni) 2 (fi nh)
+   where
+      fi ii = fromIntegral ii
+      check aas bbs = (null aas) || (aas /= bbs) || (minimum aas == 1.0)
+ 
+test :: IO ()
+test = do
+   let check rr = if (isSuccess rr) then return () else exitFailure
+       cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
+       runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
+   runtest "learned"      prop_learned
+   runtest "notlearnred"  prop_not_learned
+
 perf :: IO ()
 perf = return ()
 
-test :: IO ()
-test = do 
+mnist :: IO ()
+mnist = do 
    let
       gen = mkStdGen 0
       ds = dbn gen [785,501,501,11]
@@ -96,14 +174,19 @@ test = do
          let name = "dist/train" ++ (show ix)
          batch <- readArray name
          putStrLn $ "training: " ++ name
-         dn <- learn (mkStdGen ix) 1 db [(BxI batch)]
-         testBatch dn 0
+         let learn' dx tx = do
+               dn <- learn (mkStdGen tx) 0.01 dx [(BxI batch)]
+               if tx `mod` 10 == 0 then testBatch dn 0 else return ()
+               return dn
+         dn <- foldM learn' db [1..100]
          return dn
       testBatch :: DBN -> Int -> IO ()
       testBatch db ix = do
          let name = "dist/test" ++ (show ix)
          b <- readArray name
-         pv <- generate gen db $ BxI b
+         bxh <- generate gen db $ BxI b
+         hxb <- HxB <$> (R.transpose2P $ unBxH bxh)
+         pv <- probV hxb
          print (ix, R.toList pv)
    de <- foldM learnBatch ds [0..468]
    mapM_ (testBatch de) [0..9] 

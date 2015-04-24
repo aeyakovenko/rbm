@@ -2,9 +2,13 @@ module RBM.Repa(rbm
                ,learn
                ,energy
                ,generate
+               ,regenerate
                ,BxI(..)
                ,BxH(..)
                ,HxB(..)
+               ,IxH(..)
+               ,HxI(..)
+               ,IxB(..)
                ,RBM
                ,perf
                ,test

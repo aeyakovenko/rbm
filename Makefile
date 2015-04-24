@@ -9,6 +9,8 @@ tix_files=perf-repa-RBM.tix\
 			 trainbatches.tix\
 			 testbatches.tix\
 			 test-DBN.tix
+now:
+	cabal build test-DBN
 
 all:dist/cabal.test.ok dist/cabal.build.ok
 
@@ -23,9 +25,9 @@ dist/cabal.build.ok:$(hs_files) dist/setup-config tix
 clean:tix
 	cabal clean
 
-test:tix
-	cabal build test-DBN
-	./dist/build/test-DBN/test-DBN +RTS -N8
+mnist:tix
+	cabal build mnist-DBN
+	./dist/build/mnist-DBN/mnist-DBN +RTS -N4
 
 batches:tix
 	cabal build testbatches
