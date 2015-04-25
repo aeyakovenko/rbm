@@ -126,8 +126,8 @@ row (R.Z R.:. r R.:. _) = r
 run_prop_learned :: Double -> Int -> Int -> Int -> ([Double],[Double])
 run_prop_learned rate ni nd nh = runIdentity $ do
    let rb = dbn (mr 0) layers
-       nmin = ni `min` nh
-       nmax = ni `max` nh
+       nmin = (fi ni) `min` (fi nh)
+       nmax = (fi ni) `max` (fi nh)
        layers = (fi ni) : (take (fi nd) ((randomRs (nmin,nmax)) (mr 5))) ++ [nh]
        inputbatchL = concat $ replicate batchsz inputlst
        inputbatch = BxI $ R.fromListUnboxed (R.Z R.:. batchsz R.:. fi ni) $ inputbatchL
