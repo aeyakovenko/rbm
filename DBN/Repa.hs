@@ -8,11 +8,9 @@ module DBN.Repa(dbn
 
 import qualified RBM.Repa as RBM
 import RBM.Repa(BxI(BxI,unBxI)
-               ,HxB(HxB,unHxB)
                ,BxH(BxH,unBxH)
-               ,IxH(IxH,unIxH)
-               ,HxI(HxI,unHxI)
-               ,IxB(IxB,unIxB)
+               ,HxB(HxB,unHxB)
+               ,IxH(IxH)
                ,RBM
                ,rbm
                )
@@ -22,6 +20,8 @@ import Control.Applicative((<$>))
 import System.Random(RandomGen
                     ,split
                     ,mkStdGen
+                    ,randomRs
+                    ,random
                     )
 import Control.DeepSeq(deepseq)
 
@@ -32,12 +32,6 @@ import Data.Word(Word8)
 import Data.Mnist(readArray)
 import Control.Monad(foldM)
 import Control.Monad.Identity(runIdentity)
-import System.Random(RandomGen
-                    ,random
-                    ,randomRs
-                    ,mkStdGen
-                    ,split
-                    )
 
 
 type DBN = [RBM]
@@ -57,14 +51,15 @@ dbn rand (ni:nh:rest) = rbm r1 ni nh : dbn r2 (nh:rest)
 {--
  - teach the dbn a batch of inputs
  --}
-learn :: (Functor m, Monad m, RandomGen r) => r -> Double -> DBN -> [BxI] -> m DBN
-learn _ _ [] _ = return []
-learn rand rate (rb:rest) batches = do 
-   let (r1:r2:rn:_) = splits rand
-   nrb <- RBM.learn r1 rate rb batches
-   nbs <- nrb `deepseq` (mapM (RBM.generate r2 nrb) batches)
+learn :: (Functor m, Monad m)  => RBM.Params -> DBN -> [BxI] -> m DBN
+learn _ [] _ = return []
+learn pars (rb:rest) batches = do 
+   let rr = mkStdGen (RBM.seed pars)
+       npars = pars { RBM.seed = fst (random rr) }
+   nrb <- RBM.learn pars rb batches
+   nbs <- nrb `deepseq` (mapM (RBM.generate rr nrb) batches)
    nbs' <- (mapM (\ bb -> BxI <$> (R.transpose2P $ unHxB bb)) nbs)
-   nrbms <- learn rn rate rest nbs'
+   nrbms <- learn npars rest nbs'
    return $ nrb : nrbms
 
 {--
@@ -84,7 +79,7 @@ generate rand (rb:rest) pb = do
  - regenerate a batch of input
  --}
 regenerate :: (Functor m, Monad m, RandomGen r) => r -> DBN -> BxH -> m BxI
-regenerate r dbn bxh = regenerate' r (reverse dbn) bxh
+regenerate r dbn' bxh = regenerate' r (reverse dbn') bxh
 {-# INLINE regenerate #-}
 
 regenerate' :: (Functor m, Monad m, RandomGen r) => r -> DBN -> BxH ->  m BxI
@@ -92,7 +87,7 @@ regenerate' _ [] pb = return $ RBM.BxI $ RBM.unBxH pb
 
 regenerate' rand (rb:rest) pb = do 
    let (r1:rn:_) = splits rand
-   ixh <- IxH <$> R.transpose2P (unHxI rb)
+   ixh <- IxH <$> R.transpose2P (RBM.unHxI rb)
    ixb <- RBM.unIxB <$> RBM.regenerate r1 ixh pb
    bxh <- BxH <$> (R.transpose2P ixb)
    regenerate' rn rest bxh
@@ -118,10 +113,6 @@ splits rp = rc : splits rn
    where
       (rc,rn) = split rp
 
-row :: R.DIM2 -> Int
-row (R.Z R.:. r R.:. _) = r
-{-# INLINE row #-}
-
 -- test to see if we can learn a random string
 run_prop_learned :: Double -> Int -> Int -> Int -> ([Double],[Double])
 run_prop_learned rate ni nd nh = runIdentity $ do
@@ -137,7 +128,8 @@ run_prop_learned rate ni nd nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-   lbn <- learn (mr 1) rate rb [inputbatch]
+       pars = RBM.Params rate 1 1 0
+   lbn <- learn pars rb [inputbatch]
    bxh <- generate (mr 3) lbn inputarr
    bxi <- regenerate (mr 2) lbn bxh
    return $ ((tail $ R.toList $ unBxI $ bxi), (tail $ R.toList $ unBxI $ inputarr))
@@ -174,11 +166,9 @@ mnist = do
          let name = "dist/train" ++ (show ix)
          batch <- readArray name
          putStrLn $ "training: " ++ name
-         let learn' dx tx = do
-               dn <- learn (mkStdGen tx) 0.01 dx [(BxI batch)]
-               if tx `mod` 10 == 0 then testBatch dn 0 else return ()
-               return dn
-         dn <- foldM learn' db [1..100]
+         let pars = RBM.Params 0.01 100 0 0 
+         dn <- learn pars db [(BxI batch)]
+         testBatch dn ix
          return dn
       testBatch :: DBN -> Int -> IO ()
       testBatch db ix = do

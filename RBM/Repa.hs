@@ -3,6 +3,7 @@ module RBM.Repa(rbm
                ,energy
                ,generate
                ,regenerate
+               ,Params(..)
                ,BxI(..)
                ,BxH(..)
                ,HxB(..)
@@ -28,7 +29,6 @@ import Data.Array.Repa(Array
                       ,U
                       ,D
                       ,DIM2
-                      ,DIM1
                       ,Any(Any)
                       ,Z(Z)
                       ,(:.)((:.))
@@ -49,6 +49,7 @@ import System.Random(RandomGen
 
 import Control.Monad.Identity(runIdentity)
 import Control.DeepSeq(NFData, rnf)
+import Debug.Trace(trace)
 
 
 {--
@@ -85,9 +86,11 @@ col :: DIM2 -> Int
 col (Z :. _ :. c) = c
 {-# INLINE col #-}
 
-len :: DIM1 -> Int
-len (Z :. i ) = i
-{-# INLINE len #-}
+data Params = Params { rate :: Double     -- rate of learning each batch
+                     , maxReps :: Int     -- max number of times to repeat each batch
+                     , seed :: Int        -- random seed
+                     , minMSE :: Double   -- min MSE before learning stops for the batch
+                     }
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -95,18 +98,34 @@ rbm r ni nh = HxI nw
    where
       nw = R.randomishDoubleArray (Z :. nh :. ni) 0 1 (fst $ random r)
 
+-- update the rbm weights from each batch
+learn :: (Functor m, Monad m) => Params -> RBM -> [BxI]-> m RBM
+learn _ rb [] = return rb
+learn prm rb iis = do
+   let r1 = (mkStdGen $ seed prm)
+       npar = prm { seed = fst $ random r1 }
+       loop ix _ crb _
+         | ix > (maxReps prm) = return crb
+       loop _ cmse crb _
+         | cmse < (minMSE prm) = return crb
+       loop ix _ crb rr = do 
+         let (r2,r3) = split rr
+         (nrb,mse) <- batch r2 (rate prm) crb (head iis) 
+         loop (ix + 1) mse ((show mse) `trace` nrb) r3
+   nrb <- loop 0 (minMSE prm) rb r1
+   (unHxI rb) `R.deepSeqArray` learn npar nrb (tail iis)
+{-# INLINE learn #-}
+
 {--
  - given an rbm and a biased input array, generate the energy
  - should be: negate $ sumAll $ weights *^ (hidden `tensor` biased)
  - but everything is unrolled to experiment with Repa's parallelization
  --}
-energy :: (Functor m, Monad m) => RBM -> Array U DIM1 Double -> m Double
-energy rb ins = do 
+energy :: (Functor m, Monad m) => RBM -> BxI -> m Double
+energy rb bxi = do 
    let wws = unHxI $ weights rb
-       sz = len $ R.extent $ ins
-   bxi <- (d2u $ R.reshape (Z :. 1 :. sz) ins)
-   hxb <- (unHxB <$> hiddenProbs rb (BxI bxi))
-   hxi <- hxb `mmultP` bxi
+   hxb <- (unHxB <$> hiddenProbs rb bxi)
+   hxi <- hxb `mmultP` (unBxI bxi)
    enr <- (R.sumAllP $ wws *^ hxi)
    return $ negate enr
 
@@ -141,21 +160,16 @@ inputProbs wws hhs = do
    IxB <$> (ixb `R.deepSeqArray` (d2u $ R.map sigmoid ixb))
 {-# INLINE inputProbs #-}
 
--- update the rbm weights from each batch
-learn :: (Functor m, Monad m, RandomGen r) => r -> Double -> RBM -> [BxI]-> m RBM
-learn _ _ rb [] = return rb
-learn rand rate rb iis = do 
-   let (r1,r2) = split rand
-   nrb <- batch r1 rate rb (head iis)
-   (unHxI rb) `R.deepSeqArray` learn r2 rate nrb (tail iis)
-{-# INLINE learn #-}
 
 -- given a batch of unbiased inputs, update the rbm weights from the batch at once
-batch :: (Functor m, Monad m, RandomGen r) => r -> Double -> RBM -> BxI -> m RBM
-batch rand rate rb biased = do 
+batch :: (Functor m, Monad m, RandomGen r) => r -> Double -> RBM -> BxI -> m (RBM,Double)
+batch rand lrate rb biased = do 
    wd <- weightUpdate rand rb biased
-   let wd' = R.map ((*) rate) (unHxI wd)
-   HxI <$> (d2u $ (unHxI $ weights rb) +^ wd')
+   let wd' = R.map ((*) lrate) (unHxI wd)
+       sz = (row $ R.extent wd') * (col $ R.extent wd')
+   mse <- R.sumAllP $ R.map (\ xx -> xx * xx) wd'  
+   nrb <- HxI <$> (d2u $ (unHxI $ weights rb) +^ wd')
+   return (nrb, mse / (fromIntegral (1 + sz)))
 {-# INLINE batch #-}
 
 -- given an unbiased input batch, generate the the RBM weight updates
@@ -189,17 +203,17 @@ regenerate rand rb hidden = do
 {-# INLINE regenerate #-}
 
 randomArrayIxB :: (Functor m, Monad m) => Int -> DIM2 -> m IxB
-randomArrayIxB seed sh = IxB <$> (d2u $ R.traverse rands id set)
+randomArrayIxB rseed sh = IxB <$> (d2u $ R.traverse rands id set)
    where
-      rands = R.randomishDoubleArray sh 0 1 seed
+      rands = R.randomishDoubleArray sh 0 1 rseed
       set _ (Z :. _ :. 0) = 0
       set ff sh' = ff sh'
 {-# INLINE randomArrayIxB #-}
 
 randomArrayHxB :: (Functor m, Monad m) => Int -> DIM2 -> m HxB
-randomArrayHxB seed sh = HxB <$> (d2u $ R.traverse rands id set)
+randomArrayHxB rseed sh = HxB <$> (d2u $ R.traverse rands id set)
    where
-      rands = R.randomishDoubleArray sh 0 1 seed
+      rands = R.randomishDoubleArray sh 0 1 rseed
       set _ (Z :. 0 :. _) = 0
       set ff sh' = ff sh'
 {-# INLINE randomArrayHxB #-}
@@ -257,7 +271,7 @@ mmultP arr brr
 
 -- test to see if we can learn a random string
 run_prop_learned :: Double -> Int -> Int -> ([Double],[Double])
-run_prop_learned rate ni nh = runIdentity $ do
+run_prop_learned lrate ni nh = runIdentity $ do
    let rb = rbm (mr 0) (fi ni) (fi nh)
        inputbatchL = concat $ replicate batchsz inputlst
        inputbatch = BxI $ R.fromListUnboxed (Z:. batchsz :.fi ni) $ inputbatchL
@@ -267,7 +281,8 @@ run_prop_learned rate ni nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-   lrb <- learn (mr 1) rate rb [inputbatch]
+       pars = Params lrate 1 1 0
+   lrb <- learn pars rb [inputbatch]
    hxb <- generate (mr 3) lrb inputarr
    ixh <- IxH <$> (R.transpose2P $ unHxI lrb)
    bxh <- BxH <$> (R.transpose2P $ unHxB hxb)
@@ -292,7 +307,8 @@ prop_learn ni nh = runIdentity $ do
        rand = mkStdGen $ fi nh
        rb = rbm rand (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-   lrb <- learn rand 1.0 rb [BxI inputs]
+       pars = Params 1.0 1 1 0
+   lrb <- learn pars rb [BxI inputs]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_batch :: Word8 -> Word8 -> Word8 -> Bool
@@ -301,7 +317,7 @@ prop_batch ix ni nh = runIdentity $ do
        rand = mkStdGen $ fi ix
        inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
        fi ww = 1 + (fromIntegral ww)
-   lrb <- batch rand 1.0 rb (BxI inputs)
+   lrb <- fst <$> batch rand 1.0 rb (BxI inputs)
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
@@ -357,10 +373,10 @@ prop_inputProbs2 = runIdentity $ do
 
 prop_energy :: Int -> Word8 -> Word8 -> Bool
 prop_energy gen ni nh = runIdentity $ do 
-   let input = R.randomishDoubleArray (Z :. (fi ni)) 0 1 gen
+   let input = R.randomishDoubleArray (Z :. 1 :. (fi ni)) 0 1 gen
        rb = rbm (mkStdGen gen) (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-   ee <- energy rb input
+   ee <- energy rb (BxI input)
    return $ not $ isNaN ee
 
 test :: IO ()

@@ -9,8 +9,6 @@ tix_files=perf-repa-RBM.tix\
 			 trainbatches.tix\
 			 testbatches.tix\
 			 test-DBN.tix
-now:
-	cabal build test-DBN
 
 all:dist/cabal.test.ok dist/cabal.build.ok
 
