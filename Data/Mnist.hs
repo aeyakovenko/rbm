@@ -9,7 +9,6 @@ import qualified Data.Binary as B
 import Data.Word
 import qualified Data.List.Split as S
 import qualified Data.Array.Repa as R
-import Control.Applicative((<$>))
 import Codec.Compression.GZip as GZ
 import Data.List.Split(chunksOf)
 

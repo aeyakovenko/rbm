@@ -24,7 +24,6 @@ import Test.QuickCheck(verboseCheckWithResult)
 import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
 --impl modules
-import Control.Applicative((<$>))
 import Data.Array.Repa(Array
                       ,U
                       ,D

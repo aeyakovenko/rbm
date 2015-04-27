@@ -16,7 +16,6 @@ import RBM.Repa(BxI(BxI,unBxI)
                )
 import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.Algorithms.Matrix as R
-import Control.Applicative((<$>))
 import System.Random(RandomGen
                     ,split
                     ,mkStdGen
@@ -51,18 +50,22 @@ dbn rand (ni:nh:rest) = rbm r1 ni nh : dbn r2 (nh:rest)
 {--
  - teach the dbn a batch of inputs
  --}
-learn :: (Functor m, Monad m)  => Int -> [RBM.Params] -> DBN -> [BxI] -> m DBN
-learn _ _ [] _ = return []
-learn 0 (pars:_) (rb:rest) batches = do 
+learn :: (Monad m)  => [RBM.Params] -> DBN -> [BxI] -> m DBN
+learn params db batches = do
+   foldM (\ db' ix -> learnLayer ix params db' batches) db [0..(length db) - 1]
+
+learnLayer :: (Monad m)  => Int -> [RBM.Params] -> DBN -> [BxI] -> m DBN
+learnLayer _ _ [] _ = return []
+learnLayer 0 (pars:_) (rb:rest) batches = do 
    nrb <- RBM.learn pars rb batches
    return $ nrb : rest
-learn lvl (pars:npars) (nrb:rest) batches = do
+learnLayer lvl (pars:npars) (nrb:rest) batches = do
    let rr = mkStdGen (RBM.seed pars)
    nbs <- nrb `deepseq` (mapM (RBM.generate rr nrb) batches)
    nbs' <- (mapM (\ bb -> BxI <$> (R.transpose2P $ unHxB bb)) nbs)
-   nrbms <- learn (lvl - 1) npars rest nbs'
+   nrbms <- learnLayer (lvl - 1) npars rest nbs'
    return $ nrb : nrbms
-learn _ [] _ _ = error "dbn: not enough learning parameters"
+learnLayer _ [] _ _ = error "dbn: not enough learning parameters"
 
 {--
  - generate a batch of output
@@ -131,7 +134,7 @@ run_prop_learned rate ni nd nh = runIdentity $ do
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
        pars = RBM.Params rate 1 1 0
-   lbn <- learn (length layers) (repeat pars) rb [inputbatch]
+   lbn <- learn (take (length rb) $ repeat pars) rb [inputbatch]
    bxh <- generate (mr 3) lbn inputarr
    bxi <- regenerate (mr 2) lbn bxh
    return $ ((tail $ R.toList $ unBxI $ bxi), (tail $ R.toList $ unBxI $ inputarr))
@@ -164,14 +167,14 @@ mnist = do
       gen = mkStdGen 0
       pars = [RBM.Params 0.01 10 0 0.03,RBM.Params 0.01 100 1 0.01,RBM.Params 0.01 100 2 0.01]
       ds = dbn gen [785,501,501,11]
-      learnBatch :: Int -> DBN -> Int -> IO DBN
-      learnBatch lvl db rx = do
+      trainBatch :: Int -> DBN -> Int -> IO DBN
+      trainBatch lvl db rx = do
          let ix :: Int
              ix = fst $ randomR (0,468::Int) (mkStdGen rx)
          let name = "dist/train" ++ (show ix)
          putStrLn $ concat ["training: file: ", name, " layer: ", (show lvl)]
          batch <- readArray name
-         dn <- learn lvl pars db [(BxI batch)]
+         dn <- learnLayer lvl pars db [(BxI batch)]
          return dn
       testBatch :: DBN -> Int -> IO ()
       testBatch db ix = do
@@ -181,8 +184,8 @@ mnist = do
          hxb <- HxB <$> (R.transpose2P $ unBxH bxh)
          pv <- probV hxb
          print (ix, R.toList pv)
-      learnLayer :: DBN -> Int -> IO DBN
-      learnLayer ds' layer = foldM (learnBatch layer) ds' [0..468]
+      trainLayer :: DBN -> Int -> IO DBN
+      trainLayer ds' layer = foldM (trainBatch layer) ds' [0..468]
 
-   de <- foldM learnLayer ds [0..(length pars)]
+   de <- foldM trainLayer ds [0..(length pars)]
    mapM_ (testBatch de) [0..9] 
