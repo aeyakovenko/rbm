@@ -8,6 +8,9 @@ hs_files=RBM/List.hs\
 tix_files=perf-repa-RBM.tix\
 			 trainbatches.tix\
 			 testbatches.tix\
+			 mnist-DBN.tix\
+			 test-repa-DBN.tix\
+			 test-repa-RBM.tix\
 			 test-DBN.tix
 
 all:dist/cabal.test.ok dist/cabal.build.ok

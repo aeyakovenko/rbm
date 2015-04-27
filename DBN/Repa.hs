@@ -166,7 +166,7 @@ mnist = do
          let name = "dist/train" ++ (show ix)
          batch <- readArray name
          putStrLn $ "training: " ++ name
-         let pars = RBM.Params 0.01 100 0 0 
+         let pars = RBM.Params 0.01 100 0 0.01
          dn <- learn pars db [(BxI batch)]
          testBatch dn ix
          return dn
