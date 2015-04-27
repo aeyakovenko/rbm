@@ -105,13 +105,14 @@ learn prm rb iis = do
    let r1 = (mkStdGen $ seed prm)
        npar = prm { seed = fst $ random r1 }
        loop ix _ crb _
-         | ix > (maxReps prm) = return crb
+         | ix == (maxReps prm) = return crb
        loop _ cmse crb _
          | cmse < (minMSE prm) = return crb
        loop ix _ crb rr = do 
          let (r2,r3) = split rr
          (nrb,mse) <- batch r2 (rate prm) crb (head iis) 
-         loop (ix + 1) mse ((show mse) `trace` nrb) r3
+         let nloop = loop (ix + 1) mse ((show mse) `trace` nrb) r3
+         (unHxI nrb) `R.deepSeqArray` nloop
    nrb <- loop 0 (minMSE prm) rb r1
    (unHxI rb) `R.deepSeqArray` learn npar nrb (tail iis)
 {-# INLINE learn #-}
@@ -164,10 +165,10 @@ inputProbs wws hhs = do
 -- given a batch of unbiased inputs, update the rbm weights from the batch at once
 batch :: (Functor m, Monad m, RandomGen r) => r -> Double -> RBM -> BxI -> m (RBM,Double)
 batch rand lrate rb biased = do 
-   wd <- weightUpdate rand rb biased
-   let wd' = R.map ((*) lrate) (unHxI wd)
-       sz = (row $ R.extent wd') * (col $ R.extent wd')
-   mse <- R.sumAllP $ R.map (\ xx -> xx * xx) wd'  
+   wd <- unHxI <$> weightUpdate rand rb biased
+   let wd' = R.map ((*) lrate) wd
+       sz = (row $ R.extent wd) * (col $ R.extent wd)
+   mse <- R.sumAllP $ R.map (\ xx -> xx * xx) wd
    nrb <- HxI <$> (d2u $ (unHxI $ weights rb) +^ wd')
    return (nrb, mse / (fromIntegral (1 + sz)))
 {-# INLINE batch #-}
