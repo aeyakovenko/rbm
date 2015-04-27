@@ -150,8 +150,8 @@ test = do
    let check rr = if (isSuccess rr) then return () else exitFailure
        cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
        runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
-   runtest "learned"      prop_learned
    runtest "notlearnred"  prop_not_learned
+   runtest "learned"      prop_learned
 
 perf :: IO ()
 perf = return ()
