@@ -47,6 +47,8 @@ import System.Random(RandomGen
                     )
 
 import Control.Monad.Identity(runIdentity)
+import Control.Monad(foldM)
+import Data.Maybe(fromJust)
 import Control.DeepSeq(NFData, rnf)
 import Debug.Trace(trace)
 
@@ -99,21 +101,18 @@ rbm r ni nh = HxI nw
 
 -- update the rbm weights from each batch
 learn :: (Functor m, Monad m) => Params -> RBM -> [BxI]-> m RBM
-learn _ rb [] = return rb
 learn prm rb iis = do
    let r1 = (mkStdGen $ seed prm)
-       npar = prm { seed = fst $ random r1 }
        loop ix _ crb _
          | ix == (maxReps prm) = return crb
        loop _ cmse crb _
          | cmse < (minMSE prm) = return crb
        loop ix _ crb rr = do 
          let (r2,r3) = split rr
-         (nrb,mse) <- batch r2 (rate prm) crb (head iis) 
+         (nrb,mse) <- batch r2 (rate prm) crb iis 
          let nloop = loop (ix + 1) mse ((show mse) `trace` nrb) r3
          (unHxI nrb) `R.deepSeqArray` nloop
-   nrb <- loop 0 (minMSE prm) rb r1
-   (unHxI rb) `R.deepSeqArray` learn npar nrb (tail iis)
+   loop 0 (minMSE prm) rb r1
 {-# INLINE learn #-}
 
 {--
@@ -162,23 +161,30 @@ inputProbs wws hhs = do
 
 
 -- given a batch of unbiased inputs, update the rbm weights from the batch at once
-batch :: (Functor m, Monad m, RandomGen r) => r -> Double -> RBM -> BxI -> m (RBM,Double)
-batch rand lrate rb biased = do 
-   wd <- unHxI <$> weightUpdate rand rb biased
+batch :: (Functor m, Monad m, RandomGen r) => r -> Double -> RBM -> [BxI] -> m (RBM,Double)
+batch _ _ hxi [] = return (hxi,read "Infinity")
+batch rand lrate hxi ins = do
+   ixh <- IxH <$> (R.transpose2P (unHxI hxi))
+   wd <- unHxI <$> fromJust <$> (foldM (weightUpdateLoop rand hxi ixh) Nothing ins)
    let wd' = R.map ((*) lrate) wd
        sz = (row $ R.extent wd) * (col $ R.extent wd)
    mse <- R.sumAllP $ R.map (\ xx -> xx * xx) wd
-   nrb <- HxI <$> (d2u $ (unHxI $ weights rb) +^ wd')
+   nrb <- HxI <$> (d2u $ (unHxI $ weights hxi) +^ wd')
    return (nrb, mse / (fromIntegral (1 + sz)))
 {-# INLINE batch #-}
 
 -- given an unbiased input batch, generate the the RBM weight updates
-weightUpdate :: (Functor m, Monad m, RandomGen r) => r -> RBM -> BxI -> m HxI
-weightUpdate rand hxi bxi = do 
+weightUpdateLoop :: (Monad m, RandomGen r) => r -> HxI -> IxH -> (Maybe HxI) -> BxI -> m (Maybe HxI)
+weightUpdateLoop rand hxi ixh Nothing bxi = Just <$> weightUpdate rand hxi ixh bxi
+weightUpdateLoop rand hxi ixh (Just wd) bxi = do 
+   wd' <- weightUpdate rand hxi ixh bxi
+   Just <$> HxI <$> (d2u $ (unHxI wd) +^ (unHxI wd'))
+
+weightUpdate :: (Monad m, RandomGen r) => r -> HxI -> IxH -> BxI -> m HxI
+weightUpdate rand hxi ixh bxi = do 
    let (r1,r2) = split rand
    hxb <- generate r1 hxi bxi
    bxh <- BxH <$> (R.transpose2P (unHxB hxb))
-   ixh <- IxH <$> (R.transpose2P (unHxI hxi))
    ixb <- IxB <$> (R.transpose2P (unBxI bxi))
    ixb' <- regenerate r2 ixh bxh
    w1 <- (unHxB hxb) `mmultTP` (unIxB ixb)
@@ -317,7 +323,7 @@ prop_batch ix ni nh = runIdentity $ do
        rand = mkStdGen $ fi ix
        inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
        fi ww = 1 + (fromIntegral ww)
-   lrb <- fst <$> batch rand 1.0 rb (BxI inputs)
+   lrb <- fst <$> batch rand 1.0 rb [(BxI inputs)]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
