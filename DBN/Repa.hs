@@ -20,7 +20,6 @@ import System.Random(RandomGen
                     ,split
                     ,mkStdGen
                     ,randomRs
-                    ,randomR
                     )
 import Control.DeepSeq(deepseq)
 
@@ -133,7 +132,7 @@ run_prop_learned rate ni nd nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-       pars = RBM.Params rate 1 1 0
+       pars = RBM.Params (\ _ -> rate) 1 1 0
    lbn <- learn (take (length rb) $ repeat pars) rb [inputbatch]
    bxh <- generate (mr 3) lbn inputarr
    bxi <- regenerate (mr 2) lbn bxh
@@ -165,17 +164,17 @@ mnist :: IO ()
 mnist = do 
    let
       gen = mkStdGen 0
-      pars = [RBM.Params 0.01 10 0 0.03,RBM.Params 0.01 100 1 0.01,RBM.Params 0.01 100 2 0.01]
+      learnRate mse
+         | mse > 1 = 0.5
+         | otherwise = 0.01
+      pars = [RBM.Params learnRate 100 0.01 0,RBM.Params learnRate 100 0.01 1,RBM.Params learnRate 100 0.01 2]
       ds = dbn gen [785,501,501,11]
-      trainBatch :: Int -> DBN -> Int -> IO DBN
-      trainBatch lvl db rx = do
-         let ix :: Int
-             ix = fst $ randomR (0,468::Int) (mkStdGen rx)
-         let name = "dist/train" ++ (show ix)
-         putStrLn $ concat ["training: file: ", name, " layer: ", (show lvl)]
-         batch <- readArray name
-         dn <- learnLayer lvl pars db [(BxI batch)]
-         return dn
+      trainBatch :: DBN -> Int -> IO DBN
+      trainBatch db lvl = do
+         let name ix = "dist/train" ++ (show ix)
+         batchs <- mapM readArray $ map name [0..468::Int]
+         putStrLn $ concat ["training: layer: ", (show lvl)]
+         learnLayer lvl pars db $ map BxI batchs
       testBatch :: DBN -> Int -> IO ()
       testBatch db ix = do
          let name = "dist/test" ++ (show ix)
@@ -184,8 +183,6 @@ mnist = do
          hxb <- HxB <$> (R.transpose2P $ unBxH bxh)
          pv <- probV hxb
          print (ix, R.toList pv)
-      trainLayer :: DBN -> Int -> IO DBN
-      trainLayer ds' layer = foldM (trainBatch layer) ds' [0..468]
 
-   de <- foldM trainLayer ds [0..(length pars)]
+   de <- foldM trainBatch ds [0..(length pars)]
    mapM_ (testBatch de) [0..9] 

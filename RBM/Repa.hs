@@ -87,10 +87,10 @@ col :: DIM2 -> Int
 col (Z :. _ :. c) = c
 {-# INLINE col #-}
 
-data Params = Params { rate :: Double     -- rate of learning each batch
+data Params = Params { rate :: (Double -> Double)  -- rate of learning each batch, given the mse
                      , maxReps :: Int     -- max number of times to repeat each batch
-                     , seed :: Int        -- random seed
                      , minMSE :: Double   -- min MSE before learning stops for the batch
+                     , seed :: Int        -- random seed
                      }
 
 --create an rbm with some randomized weights
@@ -107,9 +107,9 @@ learn prm rb iis = do
          | ix == (maxReps prm) = return crb
        loop _ cmse crb _
          | cmse < (minMSE prm) = return crb
-       loop ix _ crb rr = do 
+       loop ix pmse crb rr = do 
          let (r2,r3) = split rr
-         (nrb,mse) <- batch r2 (rate prm) crb iis 
+         (nrb,mse) <- batch r2 ((rate prm) pmse) crb iis 
          let nloop = loop (ix + 1) mse ((show mse) `trace` nrb) r3
          (unHxI nrb) `R.deepSeqArray` nloop
    loop 0 (minMSE prm) rb r1
@@ -287,7 +287,7 @@ run_prop_learned lrate ni nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-       pars = Params lrate 1 1 0
+       pars = Params (\ _ -> lrate) 1 1 1
    lrb <- learn pars rb [inputbatch]
    hxb <- generate (mr 3) lrb inputarr
    ixh <- IxH <$> (R.transpose2P $ unHxI lrb)
@@ -313,7 +313,7 @@ prop_learn ni nh = runIdentity $ do
        rand = mkStdGen $ fi nh
        rb = rbm rand (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-       pars = Params 1.0 1 1 0
+       pars = Params (\ _ -> 1.0) 1 1 1
    lrb <- learn pars rb [BxI inputs]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
