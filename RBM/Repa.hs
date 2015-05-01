@@ -87,7 +87,7 @@ col :: DIM2 -> Int
 col (Z :. _ :. c) = c
 {-# INLINE col #-}
 
-data Params = Params { rate :: (Double -> Double)  -- rate of learning each batch, given the mse
+data Params = Params { rate :: (Int -> Double -> Double)  -- rate of learning each batch, given the number of samples and mse
                      , maxReps :: Int     -- max number of times to repeat each batch
                      , minMSE :: Double   -- min MSE before learning stops for the batch
                      , seed :: Int        -- random seed
@@ -100,16 +100,16 @@ rbm r ni nh = HxI nw
       nw = R.randomishDoubleArray (Z :. nh :. ni) 0 1 (fst $ random r)
 
 -- update the rbm weights from each batch
-learn :: (Functor m, Monad m) => Params -> RBM -> [BxI]-> m RBM
+learn :: (Functor m, Monad m) => Params -> RBM -> [m BxI]-> m RBM
 learn prm rb iis = do
    let r1 = (mkStdGen $ seed prm)
        loop ix _ crb _
          | ix == (maxReps prm) = return crb
        loop _ cmse crb _
          | cmse < (minMSE prm) = return crb
-       loop ix pmse crb rr = do 
+       loop ix _ crb rr = do 
          let (r2,r3) = split rr
-         (nrb,mse) <- batch r2 ((rate prm) pmse) crb iis 
+         (nrb,mse) <- batch r2 (rate prm) crb iis 
          let nloop = loop (ix + 1) mse ((show mse) `trace` nrb) r3
          (unHxI nrb) `R.deepSeqArray` nloop
    loop 0 (minMSE prm) rb r1
@@ -161,27 +161,29 @@ inputProbs wws hhs = do
 
 
 -- given a batch of unbiased inputs, update the rbm weights from the batch at once
-batch :: (Functor m, Monad m, RandomGen r) => r -> Double -> RBM -> [BxI] -> m (RBM,Double)
+batch :: (Functor m, Monad m, RandomGen r) => r -> (Int -> Double -> Double) -> RBM -> [m BxI] -> m (RBM,Double)
 batch _ _ hxi [] = return (hxi,read "Infinity")
 batch rand lrate hxi ins = do
    ixh <- IxH <$> (R.transpose2P (unHxI hxi))
    wd <- unHxI <$> fromJust <$> (foldM (weightUpdateLoop rand hxi ixh) Nothing ins)
-   let wd' = R.map ((*) lrate) wd
-       sz = (row $ R.extent wd) * (col $ R.extent wd)
    mse <- R.sumAllP $ R.map (\ xx -> xx * xx) wd
+   let ratev = lrate sz mse 
+       wd' = R.map ((*) ratev) wd
+       sz = 1 + (row $ R.extent wd) * (col $ R.extent wd) * (length ins)
    nrb <- HxI <$> (d2u $ (unHxI $ weights hxi) +^ wd')
-   return (nrb, mse / (fromIntegral (1 + sz)))
+   return (nrb, mse / (fromIntegral sz))
 {-# INLINE batch #-}
 
 -- given an unbiased input batch, generate the the RBM weight updates
-weightUpdateLoop :: (Monad m, RandomGen r) => r -> HxI -> IxH -> (Maybe HxI) -> BxI -> m (Maybe HxI)
+weightUpdateLoop :: (Monad m, RandomGen r) => r -> HxI -> IxH -> (Maybe HxI) -> m BxI -> m (Maybe HxI)
 weightUpdateLoop rand hxi ixh Nothing bxi = Just <$> weightUpdate rand hxi ixh bxi
 weightUpdateLoop rand hxi ixh (Just wd) bxi = do 
    wd' <- weightUpdate rand hxi ixh bxi
    Just <$> HxI <$> (d2u $ (unHxI wd) +^ (unHxI wd'))
 
-weightUpdate :: (Monad m, RandomGen r) => r -> HxI -> IxH -> BxI -> m HxI
-weightUpdate rand hxi ixh bxi = do 
+weightUpdate :: (Monad m, RandomGen r) => r -> HxI -> IxH -> m BxI -> m HxI
+weightUpdate rand hxi ixh mbxi = do 
+   bxi <- mbxi
    let (r1,r2) = split rand
    hxb <- generate r1 hxi bxi
    bxh <- BxH <$> (R.transpose2P (unHxB hxb))
@@ -274,7 +276,8 @@ mmultP arr brr
         mmultTP arr trr
 {-# NOINLINE mmultP #-}
 -- tests
-
+defRate :: Double -> Int -> Double -> Double
+defRate r _ _ = r
 -- test to see if we can learn a random string
 run_prop_learned :: Double -> Int -> Int -> ([Double],[Double])
 run_prop_learned lrate ni nh = runIdentity $ do
@@ -287,8 +290,8 @@ run_prop_learned lrate ni nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-       pars = Params (\ _ -> lrate) 1 1 1
-   lrb <- learn pars rb [inputbatch]
+       pars = Params (defRate lrate) 1 1 1
+   lrb <- learn pars rb [return inputbatch]
    hxb <- generate (mr 3) lrb inputarr
    ixh <- IxH <$> (R.transpose2P $ unHxI lrb)
    bxh <- BxH <$> (R.transpose2P $ unHxB hxb)
@@ -313,8 +316,8 @@ prop_learn ni nh = runIdentity $ do
        rand = mkStdGen $ fi nh
        rb = rbm rand (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-       pars = Params (\ _ -> 1.0) 1 1 1
-   lrb <- learn pars rb [BxI inputs]
+       pars = Params (defRate 1.0) 1 1 1
+   lrb <- learn pars rb [return $ BxI inputs]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_batch :: Word8 -> Word8 -> Word8 -> Bool
@@ -323,7 +326,7 @@ prop_batch ix ni nh = runIdentity $ do
        rand = mkStdGen $ fi ix
        inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
        fi ww = 1 + (fromIntegral ww)
-   lrb <- fst <$> batch rand 1.0 rb [(BxI inputs)]
+   lrb <- fst <$> batch rand (defRate 1.0) rb [return $ BxI inputs]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_init :: Int -> Word8 -> Word8 -> Bool

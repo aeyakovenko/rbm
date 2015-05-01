@@ -11,6 +11,7 @@ tix_files=perf-repa-RBM.tix\
 			 mnist-DBN.tix\
 			 test-repa-DBN.tix\
 			 test-repa-RBM.tix\
+			 bigtrainbatches.tix\
 			 test-DBN.tix
 
 all:dist/cabal.test.ok dist/cabal.build.ok
