@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module DBN.Repa(dbn
                ,learn
                ,generate
@@ -55,17 +56,17 @@ learn params db batches = do
 
 learnLayer :: (Monad m)  => Int -> [RBM.Params] -> DBN -> [m BxI] -> m DBN
 learnLayer _ _ [] _ = return []
-learnLayer 0 (pars:_) (rb:rest) batches = do 
-   nrb <- RBM.learn pars rb batches
+learnLayer 0 (pars:_) (!rb:rest) batches = do 
+   !nrb <- RBM.learn pars rb batches
    return $ nrb : rest
-learnLayer lvl (pars:npars) (nrb:rest) batches = do
+learnLayer lvl (pars:npars) (!nrb:rest) batches = do
    let rr = mkStdGen (RBM.seed pars)
        gen rb mbxi = do
          bxi <- mbxi
-         hxb <- RBM.generate rr rb bxi
+         !hxb <- bxi `deepseq` RBM.generate rr rb bxi
          BxI <$> (R.transpose2P $ unHxB hxb)
    let nbs = map (gen nrb) batches
-   nrbms <- nrb `deepseq` learnLayer (lvl - 1) npars rest nbs
+   nrbms <- learnLayer (lvl - 1) npars rest nbs
    return $ nrb : nrbms
 learnLayer _ [] _ _ = error "dbn: not enough learning parameters"
 
@@ -120,9 +121,6 @@ splits rp = rc : splits rn
    where
       (rc,rn) = split rp
 
-defRate :: Double -> Int -> Double -> Double
-defRate r _ _ = r
-
 -- test to see if we can learn a random string
 run_prop_learned :: Double -> Int -> Int -> Int -> ([Double],[Double])
 run_prop_learned rate ni nd nh = runIdentity $ do
@@ -138,8 +136,8 @@ run_prop_learned rate ni nd nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-       pars = RBM.Params (defRate rate) 1 1 0
-   lbn <- learn (take (length rb) $ repeat pars) rb [return inputbatch]
+       par = RBM.params { RBM.rate = (\ _ -> rate) }
+   lbn <- learn (take (length rb) $ repeat par) rb [return inputbatch]
    bxh <- generate (mr 3) lbn inputarr
    bxi <- regenerate (mr 2) lbn bxh
    return $ ((tail $ R.toList $ unBxI $ bxi), (tail $ R.toList $ unBxI $ inputarr))
@@ -170,16 +168,13 @@ mnist :: IO ()
 mnist = do 
    let
       gen = mkStdGen 0
-      learnRate sz mse
-         | mse > 1.00 = 0.1/(fromIntegral sz)
-         | otherwise = 0.01/(fromIntegral sz)
-      pars = [RBM.Params learnRate 100 0.01 0,RBM.Params learnRate 100 0.01 1,RBM.Params learnRate 100 0.01 2]
+      pars = [RBM.params,RBM.params,RBM.params]
       ds = dbn gen [785,501,501,11]
       trainBatch :: DBN -> Int -> IO DBN
       trainBatch db lvl = do
          let name ix = "dist/train" ++ (show ix)
              readBatch ix = BxI <$> (readArray (name ix))
-             iobatches = map readBatch [0..468::Int]
+             iobatches = map readBatch [0..9::Int]
          putStrLn $ concat ["training: layer: ", (show lvl)]
          learnLayer lvl pars db iobatches
       testBatch :: DBN -> Int -> IO ()
