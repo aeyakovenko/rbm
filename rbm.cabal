@@ -7,6 +7,7 @@ Cabal-Version:       >=1.2
 
 Library
   exposed-modules:   RBM.List, RBM.Repa
+  extensions:        BangPatterns
   Build-Depends:     base,
                      random,
                      split,

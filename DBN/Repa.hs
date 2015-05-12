@@ -174,7 +174,7 @@ mnist = do
       trainBatch db lvl = do
          let name ix = "dist/train" ++ (show ix)
              readBatch ix = BxI <$> (readArray (name ix))
-             iobatches = map readBatch [0..9::Int]
+             iobatches = map readBatch [0..468::Int]
          putStrLn $ concat ["training: layer: ", (show lvl)]
          learnLayer lvl pars db iobatches
       testBatch :: DBN -> Int -> IO ()

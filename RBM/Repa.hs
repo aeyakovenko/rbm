@@ -92,18 +92,23 @@ col :: DIM2 -> Int
 col (Z :. _ :. c) = c
 {-# INLINE col #-}
 
+type MSE = Double
                        
-data Params = Params { rate :: (Double -> Double)  -- rate of learning each batch, given the number of samples and mse
-                     , minReps :: Int     -- max number of times to repeat each batch
-                     , maxReps :: Int     -- max number of times to repeat each batch
-                     , minMSE :: Double   -- min MSE before learning stops for the batch
-                     , seed :: Int        -- random seed
+data Params = Params { rate :: (MSE -> Double)   -- rate of learning each minibatch, given the number of inputs (minbatchSize * numMiniBatches)
+                     , minMSE :: MSE             -- min MSE before changing the minibatch
+                     , minReps :: Int            -- max number of times to repeat
+                     , maxReps :: Int            -- max number of times to repeat
+                     , seed :: Int               -- random seed
                      }
 
 params :: Params
-params = Params learnRate 5 100 0.001 0
+params = Params lrate 0.005 2 4 0
    where
-      learnRate mse = if mse > 1 then 0.1 else 0.005
+      lrate mse
+         | mse < 0.01 = 0.001
+         | mse < 0.1 = 0.01
+         | mse < 1 = 0.05
+         | otherwise = 0.1
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -111,19 +116,26 @@ rbm r ni nh = HxI nw
    where
       nw = R.randomishDoubleArray (Z :. nh :. ni) 0 1 (fst $ random r)
 
+infinity :: Double
+infinity = read "Infinity"
+
 -- update the rbm weights from each batch
-learn :: (Functor m, Monad m) => Params -> RBM -> [m BxI]-> m RBM
-learn prm rb iis = do
-   let r1 = (mkStdGen $ seed prm)
-       loop ix crb _
-         | ix == (maxReps prm) = "maxreps" `trace` return crb
-       loop ix crb rr = do 
-         let (r2,r3) = split rr
-         (nrb,mse) <- batch r2 (rate prm) crb iis 
-         case (ix > (minReps prm)) && (mse < (minMSE prm)) of 
-            True -> return crb 
-            False -> (show mse) `trace` loop (ix + 1) nrb r3
-   loop 0 rb r1
+learn :: (Monad m) => Params -> RBM -> [m BxI]-> m RBM
+learn prm rb ins = do
+   let rr = (mkStdGen $ seed prm)
+       loop rep crb 0 _ r0 = loop (rep + 1) crb (length ins) infinity r0
+       loop rep crb _ _ _
+         | rep > (maxReps prm) = "maxreps" `trace` return crb
+       loop rep crb _ mse _
+         | rep > (minReps prm) && mse < (minMSE prm) = "minmse" `trace` return crb
+       loop rep crb bn mse r0
+         | rep < (minReps prm) && mse < (minMSE prm) = loop rep crb (bn - 1) infinity r0
+       loop rep crb bn _ r0 = do 
+         let (r1,r2) = split r0
+             tbatch = head $ drop bn $ cycle ins
+         (nrb,mse) <- batch r1 (rate prm) crb [tbatch]
+         (show (mse, rep, bn)) `trace` loop rep nrb bn mse r2
+   loop 0 rb (length ins) infinity rr
 {-# INLINE learn #-}
 
 {--
@@ -131,7 +143,7 @@ learn prm rb iis = do
  - should be: negate $ sumAll $ weights *^ (hidden `tensor` biased)
  - but everything is unrolled to experiment with Repa's parallelization
  --}
-energy :: (Functor m, Monad m) => RBM -> BxI -> m Double
+energy :: (Monad m) => RBM -> BxI -> m Double
 energy rb bxi = do 
    let wws = unHxI $ weights rb
    hxb <- (unHxB <$> hiddenProbs rb bxi)
@@ -149,7 +161,7 @@ d2u ar = R.computeP ar
  - map sigmoid $ biased `mmult` weights
  -
  --}
-hiddenProbs :: (Functor m, Monad m) => HxI -> BxI -> m HxB
+hiddenProbs :: (Monad m) => HxI -> BxI -> m HxB
 hiddenProbs wws iis = do
    !hxb <- (unHxI wws) `mmultTP` (unBxI iis)
    HxB <$> (d2u $ R.map sigmoid hxb)
@@ -164,7 +176,7 @@ hiddenProbs wws iis = do
  - map sigmoid $ (transpose inputs) `mmult` weights
  -
  --}
-inputProbs :: (Functor m, Monad m) => IxH -> BxH -> m IxB
+inputProbs :: (Monad m) => IxH -> BxH -> m IxB
 inputProbs wws hhs = do
    !ixb <- (unIxH wws) `mmultTP` (unBxH hhs)
    IxB <$> (d2u $ R.map sigmoid ixb)
@@ -179,7 +191,7 @@ inputProbs wws hhs = do
 --
 -- zero out a BxI input column before generating the probs
 
-batch :: (Functor m, Monad m, RandomGen r) => r -> (Double -> Double) -> RBM -> [m BxI] -> m (RBM,Double)
+batch :: (Monad m, RandomGen r) => r -> (Double -> Double) -> RBM -> [m BxI] -> m (RBM,Double)
 batch _ _ hxi [] = return (hxi,read "Infinity")
 batch rand lrate hxi ins = do
    ixh <- IxH <$> (R.transpose2P (unHxI hxi))
@@ -214,7 +226,7 @@ weightUpdate rand hxi ixh mbxi = do
 {-# INLINE weightUpdate #-}
 
 -- given a biased input batch [(1:input)], generate a biased hidden layer sample batch
-generate :: (Functor m, Monad m, RandomGen r) => r -> HxI -> BxI -> m HxB
+generate :: (Monad m, RandomGen r) => r -> HxI -> BxI -> m HxB
 generate rand rb biased = do 
    hhs <- unHxB <$> hiddenProbs rb biased
    rands <- unHxB <$> randomArrayHxB (fst $ random rand) (R.extent hhs)
@@ -222,14 +234,14 @@ generate rand rb biased = do
 {-# INLINE generate #-}
 
 -- given a batch of biased hidden layer samples, generate a batch of biased input layer samples
-regenerate :: (Functor m, Monad m, RandomGen r) => r -> IxH -> BxH -> m IxB
+regenerate :: (Monad m, RandomGen r) => r -> IxH -> BxH -> m IxB
 regenerate rand rb hidden = do 
    iis <- unIxB <$> inputProbs rb hidden 
    rands <- unIxB <$> (randomArrayIxB (fst $ random rand) (R.extent iis))
    IxB <$> (d2u $ R.zipWith checkP iis rands)
 {-# INLINE regenerate #-}
 
-randomArrayIxB :: (Functor m, Monad m) => Int -> DIM2 -> m IxB
+randomArrayIxB :: (Monad m) => Int -> DIM2 -> m IxB
 randomArrayIxB rseed sh = IxB <$> (d2u $ R.traverse rands id set)
    where
       rands = R.randomishDoubleArray sh 0 1 rseed
@@ -237,7 +249,7 @@ randomArrayIxB rseed sh = IxB <$> (d2u $ R.traverse rands id set)
       set ff sh' = ff sh'
 {-# INLINE randomArrayIxB #-}
 
-randomArrayHxB :: (Functor m, Monad m) => Int -> DIM2 -> m HxB
+randomArrayHxB :: (Monad m) => Int -> DIM2 -> m HxB
 randomArrayHxB rseed sh = HxB <$> (d2u $ R.traverse rands id set)
    where
       rands = R.randomishDoubleArray sh 0 1 rseed
