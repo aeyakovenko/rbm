@@ -136,7 +136,7 @@ run_prop_learned rate ni nd nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-       par = RBM.params { RBM.rate = (\ _ -> rate) }
+       par = RBM.params { RBM.rate = rate }
    lbn <- learn (take (length rb) $ repeat par) rb [return inputbatch]
    bxh <- generate (mr 3) lbn inputarr
    bxi <- regenerate (mr 2) lbn bxh
@@ -168,13 +168,14 @@ mnist :: IO ()
 mnist = do 
    let
       gen = mkStdGen 0
-      pars = [RBM.params,RBM.params,RBM.params]
+      pars = [RBM.params { RBM.rate = 0.001 },RBM.params { RBM.rate = 0.001 },RBM.params { RBM.rate = 0.001 }]
       ds = dbn gen [785,501,501,11]
       trainBatch :: DBN -> Int -> IO DBN
       trainBatch db lvl = do
          let name ix = "dist/train" ++ (show ix)
              readBatch ix = BxI <$> (readArray (name ix))
-             iobatches = map readBatch [0..468::Int]
+             --iobatches = map readBatch [0..468::Int]
+             iobatches = map readBatch $ take 20 (randomRs (0::Int,468) gen)
          putStrLn $ concat ["training: layer: ", (show lvl)]
          learnLayer lvl pars db iobatches
       testBatch :: DBN -> Int -> IO ()

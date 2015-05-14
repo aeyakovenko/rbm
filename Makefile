@@ -29,7 +29,7 @@ clean:tix
 
 mnist:tix
 	cabal build mnist-DBN
-	./dist/build/mnist-DBN/mnist-DBN +RTS -N4
+	./dist/build/mnist-DBN/mnist-DBN +RTS -N8
 
 batches:tix
 	cabal build testbatches
