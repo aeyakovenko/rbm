@@ -197,7 +197,6 @@ batch rand lrate hxi ins = do
 {-# INLINE batch #-}
 
 -- given an unbiased input batch, generate the the RBM weight updates
-<<<<<<< HEAD
 weightUpdateLoop :: (Monad m, RandomGen r) => r -> HxI -> IxH -> (Maybe HxI) -> m BxI -> m (Maybe HxI)
 weightUpdateLoop rand hxi ixh Nothing bxi = Just <$> weightUpdate rand hxi ixh bxi
 weightUpdateLoop rand hxi ixh (Just wd) bxi = do 
