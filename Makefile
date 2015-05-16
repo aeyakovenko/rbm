@@ -1,4 +1,5 @@
 cabal_files=rbm.cabal
+tix_files=perf-repa-RBM.tix
 
 hs_files=RBM/List.hs\
 			RBM/Repa.hs\
