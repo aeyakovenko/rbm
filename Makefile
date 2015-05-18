@@ -32,6 +32,9 @@ mnist:tix
 	cabal build mnist-DBN
 	./dist/build/mnist-DBN/mnist-DBN +RTS -N8
 
+console:tix
+	cabal build console
+
 batches:tix
 	cabal build testbatches
 	cabal build trainbatches

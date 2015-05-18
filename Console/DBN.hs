@@ -17,7 +17,6 @@ instance Yesod Console
 getConsoleR :: Handler Html
 getConsoleR = defaultLayout [whamlet|Hello World!|]
 
-type Handler = HandlerT Console IO
-
+main :: IO ()
 main = warp 8000 Console
 

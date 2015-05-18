@@ -95,14 +95,15 @@ col (Z :. _ :. c) = c
 type MSE = Double
                        
 data Params = Params { rate :: Double   -- rate of learning each minibatch, given the number of inputs (minbatchSize * numMiniBatches)
-                     , minMSE :: MSE     -- min MSE before changing the minibatch
+                     , minMSE :: MSE       -- min MSE before changing the minibatch
+                     , maxBatchReps :: Int
                      , minReps :: Int    -- max number of times to repeat
                      , maxReps :: Int    -- max number of times to repeat
                      , seed :: Int       -- random seed
                      }
 
 params :: Params
-params = Params 0.01 0.05 2 4 0
+params = Params 0.01 0.05 100 2 4 0
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -117,19 +118,20 @@ infinity = read "Infinity"
 learn :: (Monad m) => Params -> RBM -> [m BxI]-> m RBM
 learn prm rb ins = do
    let rr = (mkStdGen $ seed prm)
-       loop rep crb 0 _ r0 = loop (rep + 1) crb (length ins) infinity r0
-       loop rep crb _ _ _
+       loop rep crb 0 _ r0 _ = loop (rep + 1) crb (length ins) infinity r0 0
+       loop rep crb _ _ _ _
          | rep > (maxReps prm) = "maxreps" `trace` return crb
-       loop rep crb _ mse _
+       loop rep crb _ mse _ _
          | rep > (minReps prm) && mse < (minMSE prm) = "minmse" `trace` return crb
-       loop rep crb bn mse r0
-         | mse < (minMSE prm) = loop rep crb (bn - 1) infinity r0
-       loop rep crb bn _ r0 = do 
+       loop rep crb bn mse r0 nmb
+         | mse < (minMSE prm) || 
+           nmb > (maxBatchReps prm) = loop rep crb (bn - 1) infinity r0 0
+       loop rep crb bn _ r0 nmb = do 
          let (r1,r2) = split r0
              tbatch = head $ drop bn $ cycle ins
          (nrb,mse) <- batch r1 (rate prm) crb [tbatch]
-         (show (mse, rep, bn)) `trace` loop rep nrb bn mse r2
-   loop 0 rb (length ins) infinity rr
+         (show (mse, rep, bn)) `trace` loop rep nrb bn mse r2 (nmb + 1)
+   loop 0 rb (length ins) infinity rr 0
 {-# INLINE learn #-}
 
 {--
@@ -309,7 +311,9 @@ run_prop_learned lrate ni nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-       par = params { rate = lrate }
+       par = params { rate = lrate
+                    , maxBatchReps = 10
+                    }
    lrb <- learn par rb [return inputbatch]
    hxb <- generate (mr 3) lrb inputarr
    ixh <- IxH <$> (R.transpose2P $ unHxI lrb)

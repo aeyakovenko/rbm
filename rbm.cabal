@@ -48,10 +48,12 @@ Test-Suite proto
     ghc-options:     -threaded -O3 -main-is RBM.Proto.main
     main-is:         RBM/Proto.hs
 
-Executable console-dbn
+Executable console
     main-is:         Console/DBN.hs
     --ghc-options:     -Werror -Wall -threaded -O3 -main-is DBN.Repa.test
     ghc-options:     -Wall -threaded -O3 -main-is Console.DBN.main
+    Build-Depends:   warp,
+                     yesod
 
 
 Executable mnist-DBN
