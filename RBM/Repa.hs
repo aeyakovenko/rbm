@@ -117,22 +117,22 @@ infinity = read "Infinity"
 learn :: (Monad m) => Params -> RBM -> [m BxI]-> m RBM
 learn prm rb ins = do
    let rr = (mkStdGen $ seed prm)
-       loop rep crb 0 _ r0 _ = loop (rep + 1) crb (length ins) infinity r0 0
+       loop rep crb [] _ r0 _ = loop (rep + 1) crb ins infinity r0 0
        loop rep crb _ _ _ _
          | rep > (maxReps prm) = "maxreps" `trace` return crb
        loop rep crb _ mse _ _
          | rep >= (minReps prm) && mse < (minMSE prm) = "minmse" `trace` return crb
-       loop rep crb bn mse r0 _
-         | mse < (minMSE prm) = loop rep crb (bn - 1) infinity r0 0
-       loop rep crb bn _ r0 nmb
-         | nmb > (maxBatchReps prm) = loop rep crb (bn - 1) infinity r0 0
-       loop rep crb bn _ r0 nmb = do
+       loop rep crb bns _ r0 nmb
+         | (nmb `mod` 10 == 0) = do
             let (r1,r2) = split r0
-                tbatch = head $ drop bn $ cycle ins
-            nrb <- batch r1 (rate prm) crb [tbatch]
-            mse <- computeMse r1 crb [tbatch]
-            (show (mse, rep, bn)) `trace` loop rep nrb bn mse r2 (nmb + 1)
-   loop 0 rb (length ins) infinity rr 0
+                rbatch = head $ drop (head $ randomRs (0::Int, (length bns)) r1) $ cycle bns
+            mse <- computeMse r1 crb [rbatch]
+            (show (mse, rep, (length bns))) `trace` loop rep crb bns mse r2 (nmb + 1)
+       loop rep crb bns mse r0 nmb = do
+            let (r1,r2) = split r0
+            nrb <- batch r1 (rate prm) crb [head bns]
+            loop rep nrb (tail bns) mse r2 (nmb + 1)
+   loop 0 rb ins infinity rr (0::Int)
 {-# INLINE learn #-}
 
 {--
