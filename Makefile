@@ -30,7 +30,7 @@ clean:tix
 
 mnist:tix
 	cabal build mnist-DBN
-	./dist/build/mnist-DBN/mnist-DBN +RTS -N8
+	./dist/build/mnist-DBN/mnist-DBN +RTS -N
 
 console:tix
 	cabal build console
