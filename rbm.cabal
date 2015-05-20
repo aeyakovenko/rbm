@@ -59,8 +59,7 @@ Test-Suite proto
 Executable mnist-DBN
     --type:            exitcode-stdio-1.0
     main-is:         DBN/Repa.hs
-    --ghc-options:     -Werror -Wall -threaded -O3 -main-is DBN.Repa.test
-    ghc-options:     -Wall -threaded -O3 -main-is DBN.Repa.mnist
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is DBN.Repa.mnist
 
 Executable trainbatches
     main-is:         Data/Mnist.hs
