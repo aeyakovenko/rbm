@@ -121,10 +121,11 @@ learn prm rb ins = do
        loop rep crb _ _ _ _
          | rep > (maxReps prm) = "maxreps" `trace` return crb
        loop rep crb _ mse _ _
-         | rep > (minReps prm) && mse < (minMSE prm) = "minmse" `trace` return crb
+         | rep >= (minReps prm) && mse < (minMSE prm) = "minmse" `trace` return crb
        loop rep crb bn mse r0 nmb
-         | mse < (minMSE prm) || 
-           nmb > (maxBatchReps prm) = loop rep crb (bn - 1) infinity r0 0
+         | mse < (minMSE prm) = loop rep crb (bn - 1) infinity r0 0
+       loop rep crb bn mse r0 nmb
+         | nmb > (maxBatchReps prm) = loop rep crb (bn - 1) infinity r0 0
        loop rep crb bn _ r0 nmb = do 
          let (r1,r2) = split r0
              tbatch = head $ drop bn $ cycle ins

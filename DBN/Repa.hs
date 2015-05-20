@@ -170,7 +170,7 @@ mnist :: IO ()
 mnist = do 
    let
       gen = mkStdGen 0
-      pars = [RBM.params { RBM.rate = 0.001 },RBM.params { RBM.rate = 0.001 },RBM.params { RBM.rate = 0.001 }]
+      pars = [RBM.params { RBM.rate = 0.01 },RBM.params { RBM.rate = 0.01 },RBM.params { RBM.rate = 0.01 }]
       ds = dbn gen [785,501,501,11]
       trainBatch :: DBN -> Int -> IO DBN
       trainBatch db lvl = do
