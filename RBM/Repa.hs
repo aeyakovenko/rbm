@@ -50,7 +50,6 @@ import System.Random(RandomGen
 
 import Control.Monad.Identity(runIdentity)
 import Control.Monad(foldM)
-import Data.Maybe(fromJust)
 import Control.DeepSeq(NFData, rnf)
 import Debug.Trace(trace)
 
@@ -94,7 +93,7 @@ col (Z :. _ :. c) = c
 
 type MSE = Double
                        
-data Params = Params { rate :: Double   -- rate of learning each minibatch, given the number of inputs (minbatchSize * numMiniBatches)
+data Params = Params { rate :: Double      -- rate of learning each minibatch, given the number of inputs (minbatchSize * numMiniBatches)
                      , minMSE :: MSE       -- min MSE before changing the minibatch
                      , maxBatchReps :: Int
                      , minReps :: Int    -- max number of times to repeat
@@ -129,7 +128,8 @@ learn prm rb ins = do
        loop rep crb bn _ r0 nmb = do 
          let (r1,r2) = split r0
              tbatch = head $ drop bn $ cycle ins
-         (nrb,mse) <- batch r1 (rate prm) crb [tbatch]
+         nrb <- batch r1 (rate prm) crb [tbatch]
+         mse <- computeMse r1 nrb [tbatch]
          (show (mse, rep, bn)) `trace` loop rep nrb bn mse r2 (nmb + 1)
    loop 0 rb (length ins) infinity rr 0
 {-# INLINE learn #-}
@@ -185,38 +185,54 @@ inputProbs wws hhs = do
 --
 -- zero out a BxI input column before generating the probs
 
-batch :: (Monad m, RandomGen r) => r -> Double -> RBM -> [m BxI] -> m (RBM,Double)
-batch _ _ hxi [] = return (hxi,read "Infinity")
-batch rand lrate hxi ins = do
-   ixh <- IxH <$> (R.transpose2P (unHxI hxi))
-   wd <- unHxI <$> fromJust <$> (foldM (weightUpdateLoop rand hxi ixh) Nothing ins)
-   !mse' <- R.sumAllP $ R.map (\ xx -> xx * xx) wd
-   let mse = mse' / (fromIntegral sz)
-       wd' = R.map ((*) lrate) wd
-       sz = 1 + (row $ R.extent wd) * (col $ R.extent wd)
-   nrb <- HxI <$> (d2u $ (unHxI $ hxi) +^ wd')
-   return (nrb, mse)
+batch :: (Monad m, RandomGen r) => r -> Double -> RBM -> [m BxI] -> m RBM
+batch rand lrate hxi ins = foldM (weightUpdate rand lrate) hxi ins
 {-# INLINE batch #-}
 
 -- given an unbiased input batch, generate the the RBM weight updates
-weightUpdateLoop :: (Monad m, RandomGen r) => r -> HxI -> IxH -> (Maybe HxI) -> m BxI -> m (Maybe HxI)
-weightUpdateLoop rand hxi ixh Nothing bxi = Just <$> weightUpdate rand hxi ixh bxi
-weightUpdateLoop rand hxi ixh (Just wd) bxi = do 
-   wd' <-  weightUpdate rand hxi ixh bxi
-   Just <$> HxI <$> (d2u $ (unHxI wd) +^ (unHxI wd'))
-
-weightUpdate :: (Monad m, RandomGen r) => r -> HxI -> IxH -> m BxI -> m HxI
-weightUpdate rand hxi ixh mbxi = do 
+weightUpdate:: (Monad m, RandomGen r) => r -> Double -> HxI -> m BxI -> m (HxI)
+weightUpdate rand lrate hxi mbxi = do 
    bxi <- mbxi
+   let cols = col $ R.extent $ unBxI bxi
+       rows = row $ R.extent $ unBxI bxi
+       loop rbm' (rr,rix) = do
+            let vxi = R.slice (unBxI bxi) (Any :. (rix::Int) :. All)
+            bxi' <- BxI <$> (d2u $ R.reshape (Z :. 1 :. cols) vxi)
+            wd <- unHxI <$> weightDiff rr rbm' bxi'
+            let wd' = R.map ((*) lrate) wd
+            HxI <$> (d2u $ (unHxI $ rbm') +^ wd')
+   foldM loop hxi $ zip (splits rand) [0..(rows-1)]
+{-# INLINE weightUpdate #-}
+
+weightDiff :: (Monad m, RandomGen r) => r -> HxI -> BxI -> m HxI
+weightDiff rand hxi bxi = do 
    let (r1,r2) = split rand
    hxb <- generate r1 hxi bxi
    bxh <- BxH <$> (R.transpose2P (unHxB hxb))
    ixb <- IxB <$> (R.transpose2P (unBxI bxi))
+   ixh <- IxH <$> (R.transpose2P (unHxI hxi))
    ixb' <- regenerate r2 ixh bxh
    w1 <- (unHxB hxb) `mmultTP` (unIxB ixb)
    w2 <- (unHxB hxb) `mmultTP` (unIxB ixb')
    HxI <$> (d2u $ R.zipWith (-) w1 w2)
-{-# INLINE weightUpdate #-}
+{-# INLINE weightDiff #-}
+
+computeMse :: (Monad m, RandomGen r) => r -> HxI -> [m BxI] -> m Double
+computeMse rand hxi mbxis = do 
+   let loop !total mbxi = do
+         bxi <- mbxi
+         wd <- unHxI <$> weightDiff rand hxi bxi
+         !mse' <- R.sumAllP $ R.map (\ xx -> xx ** 2) wd
+         let sz = 1 + (row $ R.extent wd) * (col $ R.extent wd)
+         return (total +  (mse' / (fromIntegral sz)))
+   mse' <- foldM loop 0 mbxis 
+   return $ (mse' / (fromIntegral $ length mbxis)) 
+{-# INLINE computeMse #-}
+
+splits :: RandomGen r => r -> [r]
+splits rp = rc : splits rn
+   where
+      (rc,rn) = split rp
 
 -- given a biased input batch [(1:input)], generate a biased hidden layer sample batch
 generate :: (Monad m, RandomGen r) => r -> HxI -> BxI -> m HxB
@@ -348,7 +364,7 @@ prop_batch ix ni nh = runIdentity $ do
        rand = mkStdGen $ fi ix
        inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
        fi ww = 1 + (fromIntegral ww)
-   lrb <- fst <$> batch rand 1.0 rb [return $ BxI inputs]
+   lrb <- batch rand 1.0 rb [return $ BxI inputs]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
