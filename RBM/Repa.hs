@@ -102,7 +102,7 @@ data Params = Params { rate :: Double      -- rate of learning each minibatch, g
                      }
 
 params :: Params
-params = Params 0.01 0.05 100 2 4 0
+params = Params 0.01 0.05 100 1 4 0
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -122,16 +122,19 @@ learn prm rb ins = do
          | rep > (maxReps prm) = "maxreps" `trace` return crb
        loop rep crb _ mse _ _
          | rep >= (minReps prm) && mse < (minMSE prm) = "minmse" `trace` return crb
-       loop rep crb bn mse r0 nmb
+       loop rep crb bn mse r0 _
          | mse < (minMSE prm) = loop rep crb (bn - 1) infinity r0 0
-       loop rep crb bn mse r0 nmb
+       loop rep crb bn _ r0 nmb
          | nmb > (maxBatchReps prm) = loop rep crb (bn - 1) infinity r0 0
-       loop rep crb bn _ r0 nmb = do 
+       loop rep crb bn pmse r0 nmb = do 
          let (r1,r2) = split r0
              tbatch = head $ drop bn $ cycle ins
          nrb <- batch r1 (rate prm) crb [tbatch]
-         mse <- computeMse r1 nrb [tbatch]
-         (show (mse, rep, bn)) `trace` loop rep nrb bn mse r2 (nmb + 1)
+         if ((bn + nmb) `mod` 10) /= 0
+            then loop rep nrb bn pmse r2 (nmb + 1)
+            else do
+               mse <- computeMse r1 nrb [tbatch]
+               (show (mse, rep, bn)) `trace` loop rep nrb bn mse r2 (nmb + 1)
    loop 0 rb (length ins) infinity rr 0
 {-# INLINE learn #-}
 
