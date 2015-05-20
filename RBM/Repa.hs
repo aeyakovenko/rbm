@@ -92,7 +92,7 @@ col (Z :. _ :. c) = c
 {-# INLINE col #-}
 
 type MSE = Double
-                       
+
 data Params = Params { rate :: Double      -- rate of learning each minibatch, given the number of inputs (minbatchSize * numMiniBatches)
                      , minMSE :: MSE       -- min MSE before changing the minibatch
                      , maxBatchReps :: Int
@@ -126,7 +126,7 @@ learn prm rb ins = do
          | mse < (minMSE prm) = loop rep crb (bn - 1) infinity r0 0
        loop rep crb bn _ r0 nmb
          | nmb > (maxBatchReps prm) = loop rep crb (bn - 1) infinity r0 0
-       loop rep crb bn _ r0 nmb = do 
+       loop rep crb bn _ r0 nmb = do
             let (r1,r2) = split r0
                 tbatch = head $ drop bn $ cycle ins
             nrb <- batch r1 (rate prm) crb [tbatch]
@@ -139,7 +139,7 @@ learn prm rb ins = do
  - given an rbm and a biased input array, generate the energy
  --}
 energy :: (Monad m) => RBM -> BxI -> m Double
-energy rb bxi = do 
+energy rb bxi = do
    let wws = unHxI $ weights rb
    hxb <- (unHxB <$> hiddenProbs rb bxi)
    hxi <- hxb `mmultP` (unBxI bxi)
@@ -182,7 +182,7 @@ inputProbs wws hhs = do
 -- dropouts...
 -- 1 2 3   a d h    1a 2b 3c  1d 20 3f  1h 2i 3j
 -- 4 5 6   b 0 i    4a 5b 6c  4d 50 6f  4h 5i 6j
---         c f j    
+--         c f j
 --
 -- zero out a BxI input column before generating the probs
 
@@ -192,7 +192,7 @@ batch rand lrate hxi ins = foldM (weightUpdate rand lrate) hxi ins
 
 -- given an unbiased input batch, generate the the RBM weight updates
 weightUpdate:: (Monad m, RandomGen r) => r -> Double -> HxI -> m BxI -> m (HxI)
-weightUpdate rand lrate hxi mbxi = do 
+weightUpdate rand lrate hxi mbxi = do
    bxi <- mbxi
    let cols = col $ R.extent $ unBxI bxi
        rows = row $ R.extent $ unBxI bxi
@@ -206,7 +206,7 @@ weightUpdate rand lrate hxi mbxi = do
 {-# INLINE weightUpdate #-}
 
 weightDiff :: (Monad m, RandomGen r) => r -> HxI -> BxI -> m HxI
-weightDiff rand hxi bxi = do 
+weightDiff rand hxi bxi = do
    let (r1,r2) = split rand
    hxb <- generate r1 hxi bxi
    bxh <- BxH <$> (R.transpose2P (unHxB hxb))
@@ -219,15 +219,15 @@ weightDiff rand hxi bxi = do
 {-# INLINE weightDiff #-}
 
 computeMse :: (Monad m, RandomGen r) => r -> HxI -> [m BxI] -> m Double
-computeMse rand hxi mbxis = do 
+computeMse rand hxi mbxis = do
    let loop !total mbxi = do
          bxi <- mbxi
          wd <- unHxI <$> weightDiff rand hxi bxi
          !mse' <- R.sumAllP $ R.map (\ xx -> xx ** 2) wd
          let sz = 1 + (row $ R.extent wd) * (col $ R.extent wd)
          return (total +  (mse' / (fromIntegral sz)))
-   mse' <- foldM loop 0 mbxis 
-   return $ (mse' / (fromIntegral $ length mbxis)) 
+   mse' <- foldM loop 0 mbxis
+   return $ (mse' / (fromIntegral $ length mbxis))
 {-# INLINE computeMse #-}
 
 splits :: RandomGen r => r -> [r]
@@ -237,7 +237,7 @@ splits rp = rc : splits rn
 
 -- given a biased input batch [(1:input)], generate a biased hidden layer sample batch
 generate :: (Monad m, RandomGen r) => r -> HxI -> BxI -> m HxB
-generate rand rb biased = do 
+generate rand rb biased = do
    hhs <- unHxB <$> hiddenProbs rb biased
    rands <- unHxB <$> randomArrayHxB (fst $ random rand) (R.extent hhs)
    HxB <$> (d2u $ R.zipWith checkP hhs rands)
@@ -245,8 +245,8 @@ generate rand rb biased = do
 
 -- given a batch of biased hidden layer samples, generate a batch of biased input layer samples
 regenerate :: (Monad m, RandomGen r) => r -> IxH -> BxH -> m IxB
-regenerate rand rb hidden = do 
-   iis <- unIxB <$> inputProbs rb hidden 
+regenerate rand rb hidden = do
+   iis <- unIxB <$> inputProbs rb hidden
    rands <- unIxB <$> (randomArrayIxB (fst $ random rand) (R.extent iis))
    IxB <$> (d2u $ R.zipWith checkP iis rands)
 {-# INLINE regenerate #-}
@@ -286,17 +286,17 @@ sigmoid d = 1 / (1 + (exp (negate d)))
  - based on mmultP from repa-algorithms-3.3.1.2
  -}
 mmultTP  :: Monad m
-        => Array U DIM2 Double 
-        -> Array U DIM2 Double 
+        => Array U DIM2 Double
+        -> Array U DIM2 Double
         -> m (Array U DIM2 Double)
-mmultTP arr trr 
- = [arr, trr] `R.deepSeqArrays` 
-   do   
+mmultTP arr trr
+ = [arr, trr] `R.deepSeqArrays`
+   do
         let (Z :. h1  :. _) = R.extent arr
         let (Z :. w2  :. _) = R.extent trr
-        R.computeP 
+        R.computeP
          $ R.fromFunction (Z :. h1 :. w2)
-         $ \ix   -> R.sumAllS 
+         $ \ix   -> R.sumAllS
                   $ R.zipWith (*)
                         (Unsafe.unsafeSlice arr (Any :. (row ix) :. All))
                         (Unsafe.unsafeSlice trr (Any :. (col ix) :. All))
@@ -309,10 +309,10 @@ mmultTP arr trr
  - basically moved the deepseq to seq the trr instead of brr
  -}
 mmultP  :: Monad m
-        => Array U DIM2 Double 
-        -> Array U DIM2 Double 
+        => Array U DIM2 Double
+        -> Array U DIM2 Double
         -> m (Array U DIM2 Double)
-mmultP arr brr 
+mmultP arr brr
  = do   trr <- R.transpose2P brr
         mmultTP arr trr
 {-# NOINLINE mmultP #-}
@@ -349,7 +349,7 @@ prop_not_learned ni nh = (uncurry check) $ run_prop_learned (-1.0) (fi ni) (fi n
    where
       fi ii = fromIntegral ii
       check aas bbs = (null aas) || (aas /= bbs) || (minimum aas == 1.0)
-   
+
 prop_learn :: Word8 -> Word8 -> Bool
 prop_learn ni nh = runIdentity $ do
    let inputs = R.fromListUnboxed (Z:.fi nh:.fi ni) $ take ((fi ni) * (fi nh)) $ cycle [0,1]
@@ -360,7 +360,7 @@ prop_learn ni nh = runIdentity $ do
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_batch :: Word8 -> Word8 -> Word8 -> Bool
-prop_batch ix ni nh = runIdentity $ do 
+prop_batch ix ni nh = runIdentity $ do
    let rb = rbm rand (fi ni) (fi nh)
        rand = mkStdGen $ fi ix
        inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
@@ -384,7 +384,7 @@ prop_hiddenProbs gen ni nh = runIdentity $ do
    return $ (fi nh) == (row $ R.extent $ unHxB pp)
 
 prop_hiddenProbs2 :: Bool
-prop_hiddenProbs2 = runIdentity $ do 
+prop_hiddenProbs2 = runIdentity $ do
    let h0 = w00 * i0 + w01 * i1 + w02 * i2
        h1 = w10 * i0 + w11 * i1 + w12 * i2
        i0:i1:i2:_ = [1..]
@@ -401,11 +401,11 @@ prop_inputProbs gen ni nh = runIdentity $ do
        rb = rbm (mkStdGen gen) (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
    rb' <- IxH <$> (R.transpose2P (unHxI rb))
-   pp <- unIxB <$> inputProbs rb' hidden 
+   pp <- unIxB <$> inputProbs rb' hidden
    return $ (fi ni) == (row $ R.extent pp)
 
 prop_inputProbs2 :: Bool
-prop_inputProbs2 = runIdentity $ do 
+prop_inputProbs2 = runIdentity $ do
    let i0 = w00 * h0 + w10 * h1
        i1 = w01 * h0 + w11 * h1
        i2 = w02 * h0 + w12 * h1
@@ -420,7 +420,7 @@ prop_inputProbs2 = runIdentity $ do
    return $ pp' == map sigmoid [i0,i1,i2]
 
 prop_energy :: Int -> Word8 -> Word8 -> Bool
-prop_energy gen ni nh = runIdentity $ do 
+prop_energy gen ni nh = runIdentity $ do
    let input = R.randomishDoubleArray (Z :. 1 :. (fi ni)) 0 1 gen
        rb = rbm (mkStdGen gen) (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
