@@ -93,16 +93,15 @@ col (Z :. _ :. c) = c
 
 type MSE = Double
 
-data Params = Params { rate :: Double      -- rate of learning each minibatch, given the number of inputs (minbatchSize * numMiniBatches)
-                     , minMSE :: MSE       -- min MSE before changing the minibatch
-                     , maxBatchReps :: Int
-                     , minReps :: Int    -- max number of times to repeat
-                     , maxReps :: Int    -- max number of times to repeat
-                     , seed :: Int       -- random seed
+data Params = Params { rate :: Double      -- rate of learning each input
+                     , minMSE :: MSE       -- min MSE before done
+                     , minEpochs :: Int    -- min number of times to repeat
+                     , maxEpochs :: Int    -- max number of times to repeat
+                     , seed :: Int         -- random seed
                      }
 
 params :: Params
-params = Params 0.01 0.05 100 1 4 0
+params = Params 0.01 0.05 1 4 0
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -117,21 +116,23 @@ infinity = read "Infinity"
 learn :: (Monad m) => Params -> RBM -> [m BxI]-> m RBM
 learn prm rb ins = do
    let rr = (mkStdGen $ seed prm)
-       loop rep crb [] _ r0 _ = loop (rep + 1) crb ins infinity r0 0
-       loop rep crb _ _ _ _
-         | rep > (maxReps prm) = "maxreps" `trace` return crb
-       loop rep crb _ mse _ _
-         | rep >= (minReps prm) && mse < (minMSE prm) = "minmse" `trace` return crb
-       loop rep crb bns _ r0 nmb
+       loop epoch crb [] _ r0 _ = loop (epoch + 1) crb ins infinity r0 0
+       loop epoch crb _ _ _ _
+         | epoch > (maxEpochs prm) = "maxepochs" `trace` return crb
+       loop epoch crb _ mse _ _
+         | epoch >= (minEpochs prm) && mse < (minMSE prm) = "minmse" `trace` return crb
+       loop epoch crb bns _ r0 nmb
          | (nmb `mod` 10 == 0) = do
             let (r1,r2) = split r0
                 rbatch = head $ drop (head $ randomRs (0::Int, (length bns)) r1) $ cycle bns
-            mse <- computeMse r1 crb [rbatch]
-            (show (mse, rep, (length bns))) `trace` loop rep crb bns mse r2 (nmb + 1)
-       loop rep crb bns mse r0 nmb = do
+            rbatch' <- rbatch
+            mse <- computeMse r1 crb [return rbatch']
+            eng <- energy crb rbatch'
+            (show (mse, eng, epoch, (length bns))) `trace` loop epoch crb bns mse r2 (nmb + 1)
+       loop epoch crb bns mse r0 nmb = do
             let (r1,r2) = split r0
             nrb <- batch r1 (rate prm) crb [head bns]
-            loop rep nrb (tail bns) mse r2 (nmb + 1)
+            loop epoch nrb (tail bns) mse r2 (nmb + 1)
    loop 0 rb ins infinity rr (0::Int)
 {-# INLINE learn #-}
 
@@ -328,9 +329,7 @@ run_prop_learned lrate ni nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-       par = params { rate = lrate
-                    , maxBatchReps = 10
-                    }
+       par = params { rate = lrate }
    lrb <- learn par rb [return inputbatch]
    hxb <- generate (mr 3) lrb inputarr
    ixh <- IxH <$> (R.transpose2P $ unHxI lrb)

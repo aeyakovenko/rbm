@@ -136,9 +136,7 @@ run_prop_learned rate ni nd nh = runIdentity $ do
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
        batchsz = 2000
-       par = RBM.params { RBM.rate = rate
-                        , RBM.maxBatchReps = 10
-                        }
+       par = RBM.params { RBM.rate = rate }
    lbn <- learn (take (length rb) $ repeat par) rb [return inputbatch]
    bxh <- generate (mr 3) lbn inputarr
    bxi <- regenerate (mr 2) lbn bxh
