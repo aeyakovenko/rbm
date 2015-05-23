@@ -36,6 +36,7 @@ import Data.Array.Repa(Array
                       ,All(All)
                       ,(*^)
                       ,(+^)
+                      ,(-^)
                       )
 import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.Unsafe as Unsafe
@@ -101,13 +102,13 @@ data Params = Params { rate :: Double      -- rate of learning each input
                      }
 
 params :: Params
-params = Params 0.01 0.05 1 4 0
+params = Params 0.01 0.05 1 100 0
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
 rbm r ni nh = HxI nw
    where
-      nw = R.randomishDoubleArray (Z :. nh :. ni) 0 1 (fst $ random r)
+      nw = R.randomishDoubleArray (Z :. nh :. ni) (-0.01) (0.01) (fst $ random r)
 
 infinity :: Double
 infinity = read "Infinity"
@@ -124,9 +125,9 @@ learn prm rb ins = do
        loop epoch crb bns _ r0 nmb
          | (nmb `mod` 10 == 0) = do
             let (r1,r2) = split r0
-                rbatch = head $ drop (head $ randomRs (0::Int, (length bns)) r1) $ cycle bns
+                rbatch = head $ drop (head $ randomRs (0::Int, (length ins)) r1) $ cycle ins
             rbatch' <- rbatch
-            mse <- computeMse r1 crb [return rbatch']
+            mse <- reconErr r1 crb [return rbatch']
             eng <- energy crb rbatch'
             (show (mse, eng, epoch, (length bns))) `trace` loop epoch crb bns mse r2 (nmb + 1)
        loop epoch crb bns mse r0 nmb = do
@@ -216,20 +217,25 @@ weightDiff rand hxi bxi = do
    ixb' <- regenerate r2 ixh bxh
    w1 <- (unHxB hxb) `mmultTP` (unIxB ixb)
    w2 <- (unHxB hxb) `mmultTP` (unIxB ixb')
-   HxI <$> (d2u $ R.zipWith (-) w1 w2)
+   HxI <$> (d2u $ w1 -^ w2)
 {-# INLINE weightDiff #-}
 
-computeMse :: (Monad m, RandomGen r) => r -> HxI -> [m BxI] -> m Double
-computeMse rand hxi mbxis = do
+reconErr :: (Monad m, RandomGen r) => r -> HxI -> [m BxI] -> m Double
+reconErr rand hxi mbxis = do
    let loop !total mbxi = do
          bxi <- mbxi
-         wd <- unHxI <$> weightDiff rand hxi bxi
-         !mse' <- R.sumAllP $ R.map (\ xx -> xx ** 2) wd
+         hxb <- generate rand hxi bxi
+         bxh <- BxH <$> (R.transpose2P (unHxB hxb))
+         ixh <- IxH <$> (R.transpose2P (unHxI hxi))
+         ixb <- regenerate rand ixh bxh
+         bxi' <- BxI <$> (R.transpose2P (unIxB ixb)) 
+         wd <- d2u $ (unBxI bxi') -^ (unBxI bxi)
+         !mse <- R.sumAllP $ R.map (\ xx -> xx ** 2) wd
          let sz = 1 + (row $ R.extent wd) * (col $ R.extent wd)
-         return (total +  (mse' / (fromIntegral sz)))
-   mse' <- foldM loop 0 mbxis
-   return $ (mse' / (fromIntegral $ length mbxis))
-{-# INLINE computeMse #-}
+         return (total +  (mse / (fromIntegral sz)))
+   !mse <- foldM loop 0 mbxis
+   return $ (mse / (fromIntegral $ length mbxis))
+{-# INLINE reconErr #-}
 
 splits :: RandomGen r => r -> [r]
 splits rp = rc : splits rn
@@ -328,9 +334,9 @@ run_prop_learned lrate ni nh = runIdentity $ do
        inputlst = map fromIntegral $ take (fi ni) $ 1:geninputs
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
-       batchsz = 2000
-       par = params { rate = lrate }
-   lrb <- learn par rb [return inputbatch]
+       batchsz = 10
+       par = params { rate = (rate params) * lrate }
+   lrb <- learn par rb (replicate 100 (return inputbatch))
    hxb <- generate (mr 3) lrb inputarr
    ixh <- IxH <$> (R.transpose2P $ unHxI lrb)
    bxh <- BxH <$> (R.transpose2P $ unHxB hxb)
