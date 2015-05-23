@@ -102,7 +102,7 @@ data Params = Params { rate :: Double      -- rate of learning each input
                      }
 
 params :: Params
-params = Params 0.01 0.05 1 100 0
+params = Params 0.001 0.05 1 100 0
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -128,8 +128,7 @@ learn prm rb ins = do
                 rbatch = head $ drop (head $ randomRs (0::Int, (length ins)) r1) $ cycle ins
             rbatch' <- rbatch
             mse <- reconErr r1 crb [return rbatch']
-            eng <- energy crb rbatch'
-            (show (mse, eng, epoch, (length bns))) `trace` loop epoch crb bns mse r2 (nmb + 1)
+            (show (mse, epoch, (length bns))) `trace` loop epoch crb bns mse r2 (nmb + 1)
        loop epoch crb bns mse r0 nmb = do
             let (r1,r2) = split r0
             nrb <- batch r1 (rate prm) crb [head bns]
@@ -202,7 +201,10 @@ weightUpdate rand lrate hxi mbxi = do
             let vxi = R.slice (unBxI bxi) (Any :. (rix::Int) :. All)
             bxi' <- BxI <$> (d2u $ R.reshape (Z :. 1 :. cols) vxi)
             wd <- unHxI <$> weightDiff rr rbm' bxi'
-            let wd' = R.map ((*) lrate) wd
+            diffsum <- R.sumAllP $ R.map abs wd
+            weightsum <- R.sumAllP $ R.map abs (unHxI hxi)
+            let lrate' = weightsum / diffsum * (lrate)
+            let wd' = R.map ((*) lrate') wd
             HxI <$> (d2u $ (unHxI $ rbm') +^ wd')
    foldM loop hxi $ zip (splits rand) [0..(rows-1)]
 {-# INLINE weightUpdate #-}
