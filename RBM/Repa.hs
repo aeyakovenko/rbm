@@ -200,9 +200,9 @@ weightUpdate rand lrate hxi mbxi = do
        loop rbm' (rr,rix) = do
             let vxi = R.slice (unBxI bxi) (Any :. (rix::Int) :. All)
             bxi' <- BxI <$> (d2u $ R.reshape (Z :. 1 :. cols) vxi)
-            wd <- unHxI <$> weightDiff rr rbm' bxi'
-            diffsum <- R.sumAllP $ R.map abs wd
-            weightsum <- R.sumAllP $ R.map abs (unHxI hxi)
+            !wd <- unHxI <$> weightDiff rr rbm' bxi'
+            !diffsum <- R.sumAllP $ R.map abs wd
+            !weightsum <- R.sumAllP $ R.map abs (unHxI hxi)
             let lrate' = weightsum / diffsum * (lrate)
             let wd' = R.map ((*) lrate') wd
             HxI <$> (d2u $ (unHxI $ rbm') +^ wd')
