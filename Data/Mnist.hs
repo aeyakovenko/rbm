@@ -173,14 +173,22 @@ generateSamples = do
       let bb = toMatrix $ rbatches 
       writeArray name bb 
 
-printImages:: String -> DBN.DBN -> IO ()
-printImages sname db = do
-   let imagewidth = 28
-       computeStrip (RBM.BxI bxi) (Z :. rix :. cix) = 
+printSamples::Int -> String -> RBM.BxI -> IO ()
+printSamples imagewidth sfile (RBM.BxI bxi) = do
+   let
+       computeStrip (Z :. rix :. cix) = 
          let  imagenum = cix `div` imagewidth
               imagepixel = rix * (imagewidth) + (cix `mod` imagewidth)
-              sh =  Z :. imagenum :. (imagepixel + 1)
-         in   R.rgb8OfGreyDouble $ bxi R.! sh
+              pos =  Z :. imagenum :. (imagepixel + 1)
+         in   R.rgb8OfGreyDouble $ bxi R.! pos
+       rows = R.row $ R.extent bxi
+       sh = Z :. imagewidth :. (imagewidth * rows)
+   strip <- R.computeUnboxedP $ R.fromFunction sh computeStrip
+   R.writeImageToBMP sfile strip
+
+genSample:: String -> DBN.DBN -> IO ()
+genSample sname db = do
+   let imagewidth = 28
        regenSample ix = do
             let sfile = concat [sname, (show ix), ".bmp"]
             putStrLn $ concat ["generatint strip: ", sfile]
@@ -191,10 +199,7 @@ printImages sname db = do
             bxh <- DBN.generate g1 db bxi
             g2 <- newStdGen
             bxi' <- DBN.regenerate g2 db bxh
-            let rows = R.row $ R.extent $ RBM.unBxI bxi'
-            let sh = Z :. imagewidth :. (imagewidth * rows)
-            strip <- R.computeUnboxedP $ R.fromFunction sh (computeStrip bxi')
-            R.writeImageToBMP sfile strip
+            printSamples imagewidth sfile bxi'
    mapM_ regenSample [0..9::Int] 
 
 mnist :: IO ()
@@ -207,17 +212,18 @@ mnist = do
        p1 = RBM.params { RBM.rate = 0.01, RBM.minMSE = 0.1 }
        p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.01 }
        
-   printImages "dist/strip0." [r0]
+   (head iobatches) >>= (printSamples 28 "dist/original.bmp")
+   genSample "dist/strip0." [r0]
    d1 <- DBN.learnLast iobatches p1 [r0]
-   printImages "dist/strip1." d1
+   genSample "dist/strip1." d1
    d2 <- DBN.learnLast iobatches p2 d1
-   printImages "dist/strip2." d2
+   genSample "dist/strip2." d2
    d3 <- DBN.learnLast iobatches p1 (d2 ++ [r1])
-   printImages "dist/strip3." d3
+   genSample "dist/strip3." d3
    d4 <- DBN.learnLast iobatches p2 d3
-   printImages "dist/strip4." d4
+   genSample "dist/strip4." d4
    d5 <- DBN.learnLast iobatches p1 (d4 ++ [r2])
-   printImages "dist/strip5." d5
+   genSample "dist/strip5." d5
    d6 <- DBN.learnLast iobatches p2 d5
-   printImages "dist/strip6." d6
+   genSample "dist/strip6." d6
 
