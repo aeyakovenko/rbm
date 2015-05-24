@@ -264,7 +264,7 @@ randomArrayIxB :: (Monad m) => Int -> DIM2 -> m IxB
 randomArrayIxB rseed sh = IxB <$> (d2u $ R.traverse rands id set)
    where
       rands = R.randomishDoubleArray sh 0 1 rseed
-      set _ (Z :. _ :. 0) = 0
+      set _ (Z :. 0 :. _) = 0
       set ff sh' = ff sh'
 {-# INLINE randomArrayIxB #-}
 

@@ -191,7 +191,7 @@ genSample sname db = do
    let imagewidth = 28
        regenSample ix = do
             let sfile = concat [sname, (show ix), ".bmp"]
-            putStrLn $ concat ["generatint strip: ", sfile]
+            putStrLn $ concat ["generating strip: ", sfile]
             let name = "dist/sample" ++ (show ix)
                 readBatch = RBM.BxI <$> (readArray name)
             g1 <- newStdGen
@@ -209,7 +209,7 @@ mnist = do
        name ix = "dist/train" ++ (show ix)
        readBatch ix = RBM.BxI <$> (readArray (name ix))
        iobatches = map readBatch [0..468::Int]
-       p1 = RBM.params { RBM.rate = 0.01, RBM.minMSE = 0.1 }
+       p1 = RBM.params { RBM.rate = 0.01, RBM.minMSE = 0.2 }
        p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.01 }
        
    (head iobatches) >>= (printSamples 28 "dist/original.bmp")
