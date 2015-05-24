@@ -1,3 +1,5 @@
+all:mnist
+
 cabal_files=rbm.cabal
 tix_files=perf-repa-RBM.tix
 

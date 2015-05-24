@@ -13,8 +13,6 @@ Library
                      split,
                      mtl,
                      repa,
-                     repa-io,
-                     repa-algorithms,
                      QuickCheck,
                      criterion,
                      deepseq
@@ -59,35 +57,28 @@ Test-Suite proto
 
 Executable mnist-DBN
     --type:            exitcode-stdio-1.0
-    main-is:         DBN/Repa.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is DBN.Repa.mnist
+    main-is:         Data/Mnist.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.mnist
+    Build-Depends:   bytestring,
+                     repa-io,
+                     repa-algorithms,
+                     zlib,
+                     binary
 
 Executable trainbatches
     main-is:         Data/Mnist.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateTrainBatches
-    Build-Depends:   bytestring,
-                     zlib,
-                     binary
 
 Executable testbatches
     main-is:         Data/Mnist.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateTestBatches
-    Build-Depends:   bytestring,
-                     zlib,
-                     binary
 
 Executable bigtrainbatches
     main-is:         Data/Mnist.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateBigTrainBatches
-    Build-Depends:   bytestring,
-                     zlib,
-                     binary
 
 Executable samplebatches
     main-is:         Data/Mnist.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateSamples
-    Build-Depends:   bytestring,
-                     zlib,
-                     binary
 
 

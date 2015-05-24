@@ -1,10 +1,12 @@
 {-# LANGUAGE BangPatterns #-}
 module DBN.Repa(dbn
                ,learn
+               ,learnLast
                ,generate
+               ,regenerate
                ,perf
                ,test
-               ,mnist
+               ,DBN
                ) where
 
 
@@ -17,18 +19,12 @@ import RBM.Repa(BxI(BxI,unBxI)
                ,rbm
                )
 import qualified Data.Array.Repa as R
-import Data.Array.Repa(Z(Z)
-                      ,(:.)((:.))
-                      )
-import qualified Data.Array.Repa.IO.BMP as R
 import qualified Data.Array.Repa.Algorithms.Matrix as R
-import qualified Data.Array.Repa.Algorithms.Pixel as R
 import System.Random(RandomGen
                     ,split
                     ,mkStdGen
                     ,randomRs
                     ,random
-                    ,newStdGen
                     )
 import Control.DeepSeq(deepseq)
 
@@ -36,7 +32,6 @@ import System.Exit (exitFailure)
 import Test.QuickCheck(verboseCheckWithResult)
 import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
-import Data.Mnist(readArray)
 import Control.Monad(foldM)
 import Control.Monad.Identity(runIdentity)
 
@@ -160,52 +155,3 @@ test = do
 
 perf :: IO ()
 perf = return ()
-
-printImages:: String -> DBN -> IO ()
-printImages sname db = do
-   let imagewidth = 28
-       computeStrip (BxI bxi) (Z :. rix :. cix) = 
-         let  imagenum = cix `div` imagewidth
-              imagepixel = rix * (imagewidth) + (cix `mod` imagewidth)
-              sh =  Z :. imagenum :. (imagepixel + 1)
-         in   R.rgb8OfGreyDouble $ bxi R.! sh
-       regenSample ix = do 
-            let sfile = concat [sname, (show ix), ".bmp"]
-            putStrLn $ concat ["generatint strip: ", sfile]
-            let name = "dist/sample" ++ (show ix)
-                readBatch = BxI <$> (readArray name)
-            g1 <- newStdGen
-            bxi <- readBatch
-            bxh <- generate g1 db bxi
-            g2 <- newStdGen
-            bxi' <- regenerate g2 db bxh
-            let rows = R.row $ R.extent $ unBxI bxi'
-            let sh = Z :. imagewidth :. (imagewidth * rows)
-            strip <- R.computeUnboxedP $ R.fromFunction sh (computeStrip bxi')
-            R.writeImageToBMP sfile strip
-   mapM_ regenSample [0..9::Int] 
-
-mnist :: IO ()
-mnist = do 
-   gen <- newStdGen
-   let [r0,r1,r2] = dbn gen [785,501,501,11]
-       name ix = "dist/train" ++ (show ix)
-       readBatch ix = BxI <$> (readArray (name ix))
-       iobatches = map readBatch [0..468::Int]
-       p1 = RBM.params { RBM.rate = 0.01, RBM.minMSE = 0.1 }
-       p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.01 }
-       
-   printImages "dist/strip0." [r0]
-   d1 <- learnLast iobatches p1 [r0]
-   printImages "dist/strip1." d1
-   d2 <- learnLast iobatches p2 d1
-   printImages "dist/strip2." d2
-   d3 <- learnLast iobatches p1 (d2 ++ [r1])
-   printImages "dist/strip3." d3
-   d4 <- learnLast iobatches p2 d3
-   printImages "dist/strip4." d4
-   d5 <- learnLast iobatches p1 (d4 ++ [r2])
-   printImages "dist/strip5." d5
-   d6 <- learnLast iobatches p2 d5
-   printImages "dist/strip6." d6
-
