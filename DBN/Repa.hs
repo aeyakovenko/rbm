@@ -7,7 +7,7 @@ module DBN.Repa(dbn
                ,mnist
                ) where
 
-import Debug.Trace(trace)
+
 import qualified RBM.Repa as RBM
 import RBM.Repa(BxI(BxI,unBxI)
                ,BxH(BxH)
