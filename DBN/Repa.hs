@@ -9,8 +9,8 @@ module DBN.Repa(dbn
 
 import qualified RBM.Repa as RBM
 import RBM.Repa(BxI(BxI,unBxI)
-               ,BxH(BxH,unBxH)
-               ,HxB(HxB,unHxB)
+               ,BxH(BxH)
+               ,HxB(unHxB)
                ,IxH(IxH)
                ,RBM
                ,rbm
@@ -21,11 +21,13 @@ import Data.Array.Repa(Z(Z)
                       )
 import qualified Data.Array.Repa.IO.BMP as R
 import qualified Data.Array.Repa.Algorithms.Matrix as R
+import qualified Data.Array.Repa.Algorithms.Pixel as R
 import System.Random(RandomGen
                     ,split
                     ,mkStdGen
                     ,randomRs
                     ,random
+                    ,newStdGen
                     )
 import Control.DeepSeq(deepseq)
 
@@ -39,7 +41,6 @@ import Control.Monad.Identity(runIdentity)
 
 
 type DBN = [RBM]
-type PV = R.Array R.U R.DIM1 Double
 
 {--
  - create a dbn with some randomized weights
@@ -70,7 +71,7 @@ learnLast batches pars [!rb] = do
    !nrb <- RBM.learn pars rb batches
    return $ nrb : []
 learnLast batches pars (!nrb:rest) = do
-   let (r1,r2:_) = splits $ mkStdGen (RBM.seed pars)
+   let (r1:r2:_) = splits $ mkStdGen (RBM.seed pars)
        npars = pars { RBM.seed = fst $ random r1 }
        gen rb mbxi = do
          bxi <- mbxi
@@ -110,21 +111,6 @@ regenerate' rand (rb:rest) pb = do
    bxh <- BxH <$> (R.transpose2P ixb)
    regenerate' rn rest bxh
 {-# INLINE regenerate' #-}
-
-{--
- - given a batch of generated hidden nodes
- - calculate the probability of each node being one
- - basically, a way to sample the probability if the batch 
- - from the same class of inputs
- --}
-probV :: Monad m => HxB -> m PV 
-probV hxb = do 
-   sums <- R.sumP (RBM.unHxB hxb)
-   let nb = R.col $ R.extent $ RBM.unHxB hxb
-   R.computeUnboxedP $ R.map (prob nb) sums
-
-prob :: Int -> Double -> Double
-prob nb xx = xx / (fromIntegral nb)
 
 splits :: RandomGen r => r -> [r]
 splits rp = rc : splits rn
@@ -175,28 +161,28 @@ perf :: IO ()
 perf = return ()
 
 printImages:: String -> DBN -> IO ()
-printImages sname dbn = do
+printImages sname db = do
    let imagewidth = 28
        computeStrip (BxI bxi) (Z :. rix :. cix) = 
-         let  numimages = row $ R.extent $ bxi
+         let  numimages = R.row $ R.extent $ bxi
               imagenum = cix `div` numimages
               imagepixel = rix * (imagewidth) + (cix `mod` numimages)
-         in   bxi ! ( Z :. imagenum :. (imagepixel + 1))
+         in   R.rgb8OfGreyDouble $ bxi R.! ( Z :. imagenum :. (imagepixel + 1))
        regenSample ix = do 
-            let sfile = concat [sfile, (show ix), ".bmp"]
+            let sfile = concat [sname, (show ix), ".bmp"]
             putStrLn $ concat ["generatint strip: ", sfile]
-            let name ix = "dist/sample" ++ (show ix)
-                readBatch ix = BxI <$> (readArray (name ix))
+            let name = "dist/sample" ++ (show ix)
+                readBatch = BxI <$> (readArray name)
             g1 <- newStdGen
-            bxi <- readBatch ix
-            bxh <- generate g1 dbn bxi
+            bxi <- readBatch
+            bxh <- generate g1 db bxi
             g2 <- newStdGen
-            bxi <- regenerate g2 dbn bxh
-            let rows = row $ R.extent $ unBxI bxi
+            bxi' <- regenerate g2 db bxh
+            let rows = R.row $ R.extent $ unBxI bxi'
             let sh = Z :. imagewidth :. (imagewidth * rows)
-            strip <- d2u $ fromFunction sh (comptueStrip bxi)
-            R.writeMatrixToGreyscaleBMP sfile strip
-   mapM_ regenSample [0..9] 
+            strip <- R.computeUnboxedP $ R.fromFunction sh (computeStrip bxi')
+            R.writeImageToBMP sfile strip
+   mapM_ regenSample [0..9::Int] 
 
 mnist :: IO ()
 mnist = do 
