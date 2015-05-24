@@ -143,3 +143,17 @@ generateBigTrainBatches = do
       let bb = toMatrix $ snd $ unzip batch 
       writeArray name bb 
 
+generateSamples :: IO ()
+generateSamples = do
+   images <- readImages "train-images-idx3-ubyte.gz"
+   labels <- readLabels "train-labels-idx1-ubyte.gz"
+   (flip mapM_) ([0..9]) $ \ ix -> do
+      gen <- newStdGen
+      let name = "dist/sample" ++ (show ix)
+      let batch = filter (((==) ix) . fst) $ zip labels images
+          batches = snd $ unzip batch
+          len = length batches
+          rbatches = take 10 $ map (\ rr -> head $ drop rr $ cicle $ batches) (randomRs gen (0::Int, len - 1))
+      let bb = toMatrix $ rbatches 
+      writeArray name bb 
+

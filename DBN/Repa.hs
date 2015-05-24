@@ -16,6 +16,7 @@ import RBM.Repa(BxI(BxI,unBxI)
                ,rbm
                )
 import qualified Data.Array.Repa as R
+import qualified Data.Array.Repa.IO.BMP as R
 import qualified Data.Array.Repa.Algorithms.Matrix as R
 import System.Random(RandomGen
                     ,split
@@ -164,17 +165,51 @@ test = do
 perf :: IO ()
 perf = return ()
 
+printImages:: DBN -> IO ()
+printImages dbn = do
+   let imagewidth = 28
+       computeStrip (BxI bxi) (Z :. rix :. cix) = 
+         let  numimages = row $ R.extent $ bxi
+              imagenum = cix `div` numimages
+              imagepixel = rix * (imagewidth) + (cix `mod` numimages)
+         in   bxi ! ( Z :. imagenum :. (imagepixel + 1))
+       regenSample ix = do 
+            let name ix = "dist/sample" ++ (show ix)
+                readBatch ix = BxI <$> (readArray (name ix))
+            g1 <- newStdGen
+            bxi <- readBatch ix
+            bxh <- generate g1 dbn bxi
+            g2 <- newStdGen
+            bxi <- regenerate g2 dbn bxh
+            let rows = row $ R.extent $ unBxI bxi
+            let sh = Z :. imagewidth :. (imagewidth * rows)
+            strip <- d2u $ fromFunction sh (comptueStrip bxi)
+            R.writeMatrixToGreyscaleBMP ("dist/strip" ++ (show ix) ++ ".bmp") strip
+      mapM_ regenSample [0..9] 
+
 mnist :: IO ()
 mnist = do 
+   let gen = mkStdGen 0
+       d0 = dbn gen [785,501,501,11]
+       name ix = "dist/train" ++ (show ix)
+       readBatch ix = BxI <$> (readArray (name ix))
+       iobatches = map readBatch [0..468::Int]
+       p1 = RBM.params { RBM.rate = 0.01, RBM.minMSE = 0.1 }
+       p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.01 }
+       
+   d1 <- learnLayer 0 [p1] d0 iobatches
+   d2 <- learnLayer 0 [p2] d1 iobatches
+   d3 <- learnLayer 1 [p2,p1] d2 iobatches
+   d4 <- learnLayer 1 [p2,p2] d3 iobatches
+   d5 <- learnLayer 2 [p2,p2,p1] d4 iobatches
+   d6 <- learnLayer 2 [p2,p2,p2] d5 iobatches
    let
       gen = mkStdGen 0
       pars = [RBM.params { RBM.rate = 0.01 },RBM.params { RBM.rate = 0.01 },RBM.params { RBM.rate = 0.01 }]
-      ds = dbn gen [785,501,501,11]
       trainBatch :: DBN -> Int -> IO DBN
       trainBatch db lvl = do
          let name ix = "dist/train" ++ (show ix)
              readBatch ix = BxI <$> (readArray (name ix))
-             --iobatches = map readBatch [0..468::Int]
              iobatches = map readBatch $ take 20 (randomRs (0::Int,468) gen)
          putStrLn $ concat ["training: layer: ", (show lvl)]
          learnLayer lvl pars db iobatches

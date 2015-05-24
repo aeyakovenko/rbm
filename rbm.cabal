@@ -82,4 +82,11 @@ Executable bigtrainbatches
                      zlib,
                      binary
 
+Executable samplebatches
+    main-is:         Data/Mnist.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateSamples
+    Build-Depends:   bytestring,
+                     zlib,
+                     binary
+
 

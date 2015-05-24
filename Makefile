@@ -13,7 +13,8 @@ tix_files=perf-repa-RBM.tix\
 			 test-repa-DBN.tix\
 			 test-repa-RBM.tix\
 			 bigtrainbatches.tix\
-			 test-DBN.tix
+			 test-DBN.tix\
+			 console.tix
 
 all:dist/cabal.test.ok dist/cabal.build.ok
 
