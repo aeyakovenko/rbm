@@ -102,7 +102,7 @@ data Params = Params { rate :: Double      -- rate of learning each input
                      }
 
 params :: Params
-params = Params 0.001 0.01 1 100 0
+params = Params 0.001 0.01 0 100 0
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
