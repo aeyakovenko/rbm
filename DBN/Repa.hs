@@ -7,6 +7,7 @@ module DBN.Repa(dbn
                ,mnist
                ) where
 
+import Debug.Trace(trace)
 import qualified RBM.Repa as RBM
 import RBM.Repa(BxI(BxI,unBxI)
                ,BxH(BxH)
@@ -164,10 +165,10 @@ printImages:: String -> DBN -> IO ()
 printImages sname db = do
    let imagewidth = 28
        computeStrip (BxI bxi) (Z :. rix :. cix) = 
-         let  numimages = R.row $ R.extent $ bxi
-              imagenum = cix `div` numimages
-              imagepixel = rix * (imagewidth) + (cix `mod` numimages)
-         in   R.rgb8OfGreyDouble $ bxi R.! ( Z :. imagenum :. (imagepixel + 1))
+         let  imagenum = cix `div` imagewidth
+              imagepixel = rix * (imagewidth) + (cix `mod` imagewidth)
+              sh =  Z :. imagenum :. (imagepixel + 1)
+         in   R.rgb8OfGreyDouble $ bxi R.! sh
        regenSample ix = do 
             let sfile = concat [sname, (show ix), ".bmp"]
             putStrLn $ concat ["generatint strip: ", sfile]
@@ -194,6 +195,7 @@ mnist = do
        p1 = RBM.params { RBM.rate = 0.01, RBM.minMSE = 0.1 }
        p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.01 }
        
+   printImages "dist/strip0." [r0]
    d1 <- learnLast iobatches p1 [r0]
    printImages "dist/strip1." d1
    d2 <- learnLast iobatches p2 d1
