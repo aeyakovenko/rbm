@@ -5,15 +5,15 @@ Simple single layer implementation in haskell.  Take a look at [RBM/List.hs](RBM
 
 Repa based single layer implementation [RBM/Repa.hs](RBM/Repa.hs).
 
-Multi layer implmentation [DBN/Repa.sh](DBN/Repa.hs).
+Multi layer implmentation [DBN/Repa.hs](DBN/Repa.hs).
 
 run `make mnist` to test the mnist training.
 
 Todo
 ----
 
-* gpu based one using accelrate 
 * console to monitor the recustructions, change rate etc..
+* gpu based one using accelrate-cuda 
 
 experiments
 -----------

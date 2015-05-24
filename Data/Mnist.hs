@@ -1,6 +1,11 @@
 --from https://github.com/mhwombat/backprop-example/blob/master/Mnist.hs
 {-# LANGUAGE FlexibleInstances #-}
-module Data.Mnist (generateTrainBatches, generateTestBatches, readArray, generateBigTrainBatches)
+module Data.Mnist (generateTrainBatches
+                  ,generateTestBatches
+                  ,readArray
+                  ,generateBigTrainBatches
+                  ,generateSamples
+                  )
   where
 
 import qualified Data.ByteString.Lazy as BL
@@ -11,6 +16,7 @@ import qualified Data.List.Split as S
 import qualified Data.Array.Repa as R
 import Codec.Compression.GZip as GZ
 import Data.List.Split(chunksOf)
+import System.Random(newStdGen, randomRs)
 
 
 data Image = Image {
@@ -153,7 +159,7 @@ generateSamples = do
       let batch = filter (((==) ix) . fst) $ zip labels images
           batches = snd $ unzip batch
           len = length batches
-          rbatches = take 10 $ map (\ rr -> head $ drop rr $ cicle $ batches) (randomRs gen (0::Int, len - 1))
+          rbatches = take 10 $ map (\ rr -> head $ drop rr $ cycle $ batches) (randomRs (0::Int, len - 1) gen)
       let bb = toMatrix $ rbatches 
       writeArray name bb 
 

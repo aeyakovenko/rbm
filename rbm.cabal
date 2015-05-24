@@ -13,6 +13,7 @@ Library
                      split,
                      mtl,
                      repa,
+                     repa-io,
                      repa-algorithms,
                      QuickCheck,
                      criterion,
