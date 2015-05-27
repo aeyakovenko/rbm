@@ -96,13 +96,14 @@ type MSE = Double
 
 data Params = Params { rate :: Double      -- rate of learning each input
                      , minMSE :: MSE       -- min MSE before done
-                     , minEpochs :: Int    -- min number of times to repeat
-                     , maxEpochs :: Int    -- max number of times to repeat
+                     , minBatches :: Int   -- min number of times to repeat
+                     , maxBatches :: Int   -- max number of times to repeat
+                     , miniBatch :: Int
                      , seed :: Int         -- random seed
                      }
 
 params :: Params
-params = Params 0.001 0.01 0 100 0
+params = Params 0.001 0.01 100 1000 5 0
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -115,25 +116,31 @@ infinity = read "Infinity"
 
 -- update the rbm weights from each batch
 learn :: (Monad m) => Params -> RBM -> [m BxI]-> m RBM
-learn prm rb ins = do
-   let rr = (mkStdGen $ seed prm)
-       loop epoch crb [] _ r0 _ = loop (epoch + 1) crb ins infinity r0 0
-       loop epoch crb _ _ _ _
-         | epoch > (maxEpochs prm) = "maxepochs" `trace` return crb
-       loop epoch crb _ mse _ _
-         | epoch >= (minEpochs prm) && mse < (minMSE prm) = "minmse" `trace` return crb
-       loop epoch crb bns _ r0 nmb
-         | (nmb `mod` 10 == 0) = do
+learn prm rb batches = do
+   let 
+       ins = cycle batches
+       loop bnum crb _ _
+         | bnum > (maxBatches prm) = "maxbatches" `trace` return crb
+       loop bnum crb mse _
+         | bnum >= (minBatches prm) && mse < (minMSE prm) = "minmse" `trace` return crb
+       loop bnum crb _ r0
+         | ((fst $ random r0) `mod` (10::Int) == 0) = do
             let (r1,r2) = split r0
-                rbatch = head $ drop (head $ randomRs (0::Int, (length ins)) r1) $ cycle ins
-            rbatch' <- rbatch
-            mse <- reconErr r1 crb [return rbatch']
-            (show (mse, epoch, (length bns))) `trace` loop epoch crb bns mse r2 (nmb + 1)
-       loop epoch crb bns mse r0 nmb = do
+                rbxi = head $ drop (head $ randomRs (0::Int, (length batches)) r1) ins
+            bxi <- rbxi
+            mse <- reconErr r1 crb [return bxi]
+            (show (mse, bnum)) `trace` loop bnum crb mse r2
+       loop bnum crb mse r0 = do
             let (r1,r2) = split r0
-            nrb <- batch r1 (rate prm) crb [head bns]
-            loop epoch nrb (tail bns) mse r2 (nmb + 1)
-   loop 0 rb ins infinity rr (0::Int)
+                rbxi = head $ drop (head $ randomRs (0::Int, (length batches)) r1) ins
+                par = prm { seed = (fst $ random r1) }
+            bxi <- rbxi
+            let rows = row $ R.extent $ unBxI bxi
+                nbnum = bnum + rows
+            nrb <- batch par crb [return bxi]
+            loop nbnum nrb mse r2
+       rr = (mkStdGen $ seed prm)
+   loop 0 rb infinity rr
 {-# INLINE learn #-}
 
 {--
@@ -187,26 +194,32 @@ inputProbs wws hhs = do
 --
 -- zero out a BxI input column before generating the probs
 
-batch :: (Monad m, RandomGen r) => r -> Double -> RBM -> [m BxI] -> m RBM
-batch rand lrate hxi ins = foldM (weightUpdate rand lrate) hxi ins
+batch :: (Monad m) => Params -> RBM -> [m BxI] -> m RBM
+batch par hxi ins = foldM (weightUpdate par) hxi ins
 {-# INLINE batch #-}
 
 -- given an unbiased input batch, generate the the RBM weight updates
-weightUpdate:: (Monad m, RandomGen r) => r -> Double -> HxI -> m BxI -> m (HxI)
-weightUpdate rand lrate hxi mbxi = do
+weightUpdate:: (Monad m) => Params-> HxI -> m BxI -> m (HxI)
+weightUpdate par hxi mbxi = do
    bxi <- mbxi
    let cols = col $ R.extent $ unBxI bxi
        rows = row $ R.extent $ unBxI bxi
+       rand = mkStdGen (seed par)
        loop rbm' (rr,rix) = do
-            let vxi = R.slice (unBxI bxi) (Any :. (rix::Int) :. All)
-            bxi' <- BxI <$> (d2u $ R.reshape (Z :. 1 :. cols) vxi)
+            let sz | ((miniBatch par) + rix) > rows = rows - rix
+                   | otherwise = (miniBatch par)
+                vxi = R.extract 
+                     (Z :. (rix::Int) :. 0)
+                     (Z :. sz :. cols)
+                     (unBxI bxi)
+            bxi' <- BxI <$> (d2u vxi)
             !wd <- unHxI <$> weightDiff rr rbm' bxi'
             !diffsum <- R.sumAllP $ R.map abs wd
             !weightsum <- R.sumAllP $ R.map abs (unHxI hxi)
-            let lrate' = weightsum / diffsum * (lrate)
+            let lrate' = (rate par) * weightsum / diffsum
             let wd' = R.map ((*) lrate') wd
             HxI <$> (d2u $ (unHxI $ rbm') +^ wd')
-   foldM loop hxi $ zip (splits rand) [0..(rows-1)]
+   foldM loop hxi $ zip (splits rand) [0..((rows) `div` (miniBatch par))]
 {-# INLINE weightUpdate #-}
 
 weightDiff :: (Monad m, RandomGen r) => r -> HxI -> BxI -> m HxI
@@ -372,7 +385,7 @@ prop_batch ix ni nh = runIdentity $ do
        rand = mkStdGen $ fi ix
        inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
        fi ww = 1 + (fromIntegral ww)
-   lrb <- batch rand 1.0 rb [return $ BxI inputs]
+   lrb <- batch params rb [return $ BxI inputs]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
