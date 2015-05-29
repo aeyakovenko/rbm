@@ -4,6 +4,8 @@ module RBM.Repa(rbm
                ,energy
                ,generate
                ,regenerate
+               ,hiddenProbs
+               ,inputProbs
                ,Params(..)
                ,params
                ,BxI(..)
@@ -15,6 +17,7 @@ module RBM.Repa(rbm
                ,RBM
                ,perf
                ,test
+               ,run_prop_learned
                ) where
 
 --benchmark modules
@@ -103,7 +106,7 @@ data Params = Params { rate :: Double      -- rate of learning each input
                      }
 
 params :: Params
-params = Params 0.001 0.01 100 1000 5 0
+params = Params 0.01 0.001 10 10000 5 0
 
 --create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
@@ -216,7 +219,9 @@ weightUpdate par hxi mbxi = do
             !wd <- unHxI <$> weightDiff rr rbm' bxi'
             !diffsum <- R.sumAllP $ R.map abs wd
             !weightsum <- R.sumAllP $ R.map abs (unHxI hxi)
-            let lrate' = (rate par) * weightsum / diffsum
+            let lrate'
+                  | diffsum == 0 = rate par
+                  | otherwise = (rate par) * weightsum / diffsum
             let wd' = R.map ((*) lrate') wd
             HxI <$> (d2u $ (unHxI $ rbm') +^ wd')
    foldM loop hxi $ zip (splits rand) [0..((rows) `div` (miniBatch par))]
@@ -339,36 +344,29 @@ mmultP arr brr
         mmultTP arr trr
 {-# NOINLINE mmultP #-}
 -- test to see if we can learn a random string
-run_prop_learned :: Double -> Int -> Int -> ([Double],[Double])
+run_prop_learned :: Double -> Int -> Int -> Double
 run_prop_learned lrate ni nh = runIdentity $ do
    let rb = rbm (mr 0) (fi ni) (fi nh)
        inputbatchL = concat $ replicate batchsz inputlst
        inputbatch = BxI $ R.fromListUnboxed (Z:. batchsz :.fi ni) $ inputbatchL
-       inputarr = BxI $ R.fromListUnboxed (Z:. 1 :. fi ni) $ inputlst
        geninputs = randomRs (0::Int,1::Int) (mr 4)
        inputlst = map fromIntegral $ take (fi ni) $ 1:geninputs
        fi ww = 1 + ww
        mr i = mkStdGen (fi ni + fi nh + i)
-       batchsz = 10
-       par = params { rate = (rate params) * lrate }
-   lrb <- learn par rb (replicate 100 (return inputbatch))
-   hxb <- generate (mr 3) lrb inputarr
-   ixh <- IxH <$> (R.transpose2P $ unHxI lrb)
-   bxh <- BxH <$> (R.transpose2P $ unHxB hxb)
-   ixb <- regenerate (mr 2) ixh bxh
-   bxi <- BxI <$> (R.transpose2P $ unIxB ixb)
-   return $ ((tail $ R.toList $ unBxI $ bxi), (tail $ R.toList $ unBxI $ inputarr))
+       batchsz = 2000
+       par = params { rate = 0.1 * lrate, miniBatch = 5, maxBatches = 2000  }
+   lrb <- learn par rb [return inputbatch]
+   reconErr (mr 2) lrb [return inputbatch]
 
 prop_learned :: Word8 -> Word8 -> Bool
-prop_learned ni nh = (uncurry (==)) $ run_prop_learned 1.0 (fi ni) (fi nh)
+prop_learned ni nh = 0.1 > (run_prop_learned 1.0 (fi ni) (fi nh))
    where
       fi = fromIntegral
 
 prop_not_learned :: Word8 -> Word8 -> Bool
-prop_not_learned ni nh = (uncurry check) $ run_prop_learned (-1.0) (fi ni) (fi nh)
+prop_not_learned ni nh = 0.1 < (run_prop_learned (-1.0) (fi ni) (fi nh))
    where
-      fi ii = fromIntegral ii
-      check aas bbs = (null aas) || (aas /= bbs) || (minimum aas == 1.0)
+      fi ii = 2 + (fromIntegral ii)
 
 prop_learn :: Word8 -> Word8 -> Bool
 prop_learn ni nh = runIdentity $ do
@@ -376,7 +374,8 @@ prop_learn ni nh = runIdentity $ do
        rand = mkStdGen $ fi nh
        rb = rbm rand (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-   lrb <- learn params rb [return $ BxI inputs]
+       par = params { rate = 1.0 , miniBatch = 5, maxBatches = 2000 }
+   lrb <- learn par rb [return $ BxI inputs]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_batch :: Word8 -> Word8 -> Word8 -> Bool
@@ -385,7 +384,8 @@ prop_batch ix ni nh = runIdentity $ do
        rand = mkStdGen $ fi ix
        inputs = R.fromListUnboxed (Z:.fi ix:.fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
        fi ww = 1 + (fromIntegral ww)
-   lrb <- batch params rb [return $ BxI inputs]
+       par = params { rate = 1.0 , miniBatch = 5, maxBatches = 2000  }
+   lrb <- batch par rb [return $ BxI inputs]
    return $ (R.extent $ unHxI $ weights rb) == (R.extent $ unHxI $ weights $ lrb)
 
 prop_init :: Int -> Word8 -> Word8 -> Bool
@@ -460,8 +460,8 @@ test = do
    runtest "inputp2"      prop_inputProbs2
    runtest "batch"        prop_batch
    runtest "learn"        prop_learn
-   runtest "learned"      prop_learned
    runtest "notlearnred"  prop_not_learned
+   runtest "learned"      prop_learned
 
 perf :: IO ()
 perf = do

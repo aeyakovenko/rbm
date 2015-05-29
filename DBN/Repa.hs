@@ -67,11 +67,11 @@ learnLast batches pars [!rb] = do
    !nrb <- RBM.learn pars rb batches
    return $ nrb : []
 learnLast batches pars (!nrb:rest) = do
-   let (r1:r2:_) = splits $ mkStdGen (RBM.seed pars)
+   let (r1:_) = splits $ mkStdGen (RBM.seed pars)
        npars = pars { RBM.seed = fst $ random r1 }
        gen rb mbxi = do
          bxi <- mbxi
-         !hxb <- bxi `deepseq` RBM.generate r2 rb bxi
+         !hxb <- bxi `deepseq` RBM.hiddenProbs rb bxi
          BxI <$> (R.transpose2P $ unHxB hxb)
    let nbs = map (gen nrb) batches
    nrbms <- learnLast nbs npars rest
@@ -82,12 +82,10 @@ learnLast batches pars (!nrb:rest) = do
  --}
 generate :: (Functor m, Monad m, RandomGen r) => r -> DBN -> BxI -> m BxH
 generate _ [] pb = return $ RBM.BxH $ RBM.unBxI pb
-
 generate rand (rb:rest) pb = do 
-   let (r1:rn:_) = splits rand
-   hxb <- RBM.unHxB <$> RBM.generate r1 rb pb
+   hxb <- RBM.unHxB <$> RBM.hiddenProbs rb pb
    bxi <- BxI <$> (R.transpose2P hxb)
-   generate rn rest bxi
+   generate rand rest bxi
 {-# INLINE generate #-}
 
 {--
@@ -99,13 +97,11 @@ regenerate r dbn' bxh = regenerate' r (reverse dbn') bxh
 
 regenerate' :: (Functor m, Monad m, RandomGen r) => r -> DBN -> BxH ->  m BxI
 regenerate' _ [] pb = return $ RBM.BxI $ RBM.unBxH pb
-
 regenerate' rand (rb:rest) pb = do 
-   let (r1:rn:_) = splits rand
    ixh <- IxH <$> R.transpose2P (RBM.unHxI rb)
-   ixb <- RBM.unIxB <$> RBM.regenerate r1 ixh pb
+   ixb <- RBM.unIxB <$> RBM.inputProbs ixh pb
    bxh <- BxH <$> (R.transpose2P ixb)
-   regenerate' rn rest bxh
+   regenerate' rand rest bxh
 {-# INLINE regenerate' #-}
 
 splits :: RandomGen r => r -> [r]
