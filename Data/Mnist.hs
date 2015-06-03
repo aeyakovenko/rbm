@@ -184,6 +184,7 @@ printSamples imagewidth sfile (RBM.BxI bxi) = do
        rows = R.row $ R.extent bxi
        sh = Z :. imagewidth :. (imagewidth * rows)
    strip <- R.computeUnboxedP $ R.fromFunction sh computeStrip
+   putStrLn $ concat ["generating image: ", sfile]
    R.writeImageToBMP sfile strip
 
 genSample:: String -> DBN.DBN -> IO ()
@@ -191,7 +192,6 @@ genSample sname db = do
    let imagewidth = 28
        regenSample ix = do
             let sfile = concat [sname, (show ix), ".bmp"]
-            putStrLn $ concat ["generating strip: ", sfile]
             let name = "dist/sample" ++ (show ix)
                 readBatch = RBM.BxI <$> (readArray name)
             g1 <- newStdGen
@@ -228,44 +228,37 @@ mnist = do
        name ix = "dist/train" ++ (show ix)
        readBatch ix = RBM.BxI <$> (readArray (name ix))
        iobatches = map readBatch [0..468::Int]
-       p1 = RBM.params { RBM.rate = 0.01, RBM.minMSE = 0.10, RBM.maxBatches = 10000 }
-       p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.05, RBM.maxBatches = 100000 }
-       p3 = RBM.params { RBM.rate = 0.0005, RBM.minMSE = 0.01, RBM.maxBatches = 100000 }
+       p1 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.10, RBM.maxBatches = 10000 }
+       p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.05, RBM.maxBatches = 10000 }
        
    (head iobatches) >>= (printSamples 28 "dist/original.bmp")
-   genSample "dist/strip0." [r0]
+   genSample "dist/strip.0." [r0]
+   printSamples 28 "dist/weights.0.bmp" (RBM.BxI $ RBM.unHxI $ r0)
 
    dd <- DBN.learnLast iobatches p1 [r0]
-   genSample "dist/strip1.p1" dd
+   genSample "dist/strip1.p1." dd
+   printSamples 28 "dist/weights.1.p1.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
+
    dd <- DBN.learnLast iobatches p2 dd
-   genSample "dist/strip1.p2." dd
-   dd <- DBN.learnLast iobatches p3 dd
-   genSample "dist/strip1.p3." dd
-   dd <- DBN.learnLast iobatches p3 dd
-   genSample "dist/strip1.p3." dd
+   genSample "dist/strip.1.p2." dd
+   printSamples 28 "dist/weights.1.p2.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
 
    dd <- DBN.learnLast iobatches p1 (dd ++ [r1])
-   genSample "dist/strip2.p1" dd
+   genSample "dist/strip.2.p1" dd
+   printSamples 28 "dist/weights.2.p1.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
    dd <- DBN.learnLast iobatches p2 dd
-   genSample "dist/strip2.p2" dd
-   dd <- DBN.learnLast iobatches p3 dd
-   genSample "dist/strip2.p3" dd
-   dd <- DBN.learnLast iobatches p3 dd
-   genSample "dist/strip2.p3" dd
+   genSample "dist/strip.2.p2" dd
+   printSamples 28 "dist/weights.2.p2.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
 
    dd <- DBN.learnLast iobatches p1 (dd ++ [r2])
-   genSample "dist/strip3.p1" dd
+   genSample "dist/strip.3.p1" dd
+   printSamples 28 "dist/weights.3.p1.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
    mapM_ (testBatch dd) [0..9] 
 
    dd <- DBN.learnLast iobatches p2 dd
-   genSample "dist/strip3.p2" dd
+   genSample "dist/strip.3.p2" dd
+   printSamples 28 "dist/weights.3.p2.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
    mapM_ (testBatch dd) [0..9] 
 
-   dd <- DBN.learnLast iobatches p3 dd
-   genSample "dist/strip3.p3" dd
-   mapM_ (testBatch dd) [0..9] 
 
-   dd <- DBN.learnLast iobatches p3 dd
-   genSample "dist/strip3.p3" dd
-   mapM_ (testBatch dd) [0..9] 
 
