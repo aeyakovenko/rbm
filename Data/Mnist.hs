@@ -229,7 +229,7 @@ mnist = do
        readBatch ix = RBM.BxI <$> (readArray (name ix))
        iobatches = map readBatch [0..468::Int]
        p1 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.10, RBM.maxBatches = 10000 }
-       p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.05, RBM.maxBatches = 10000 }
+       p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.10, RBM.maxBatches = 40000 }
        
    (head iobatches) >>= (printSamples 28 "dist/original.bmp")
    genSample "dist/strip.0." [r0]
