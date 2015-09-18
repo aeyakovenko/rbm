@@ -29,8 +29,8 @@ instance NFData (Matrix U a b) where
    rnf (Matrix ar) = ar `R.deepSeqArray` ()
 
 class MatrixOps a b where
-   mmult :: Monad m => (Matrix U a b) -> (Matrix U b a) -> m (Matrix U a a)
-   mmultT :: Monad m => (Matrix U a b) -> (Matrix U a b) -> m (Matrix U a a)
+   mmult :: Monad m => (Matrix U a b) -> (Matrix U b c) -> m (Matrix U a c)
+   mmultT :: Monad m => (Matrix U a b) -> (Matrix U c b) -> m (Matrix U a c)
    d2u :: Monad m => Matrix D a b -> m (Matrix U a b)
    (*^) :: Matrix c a b -> Matrix d a b -> (Matrix D a b)
    (+^) :: Matrix c a b -> Matrix d a b -> (Matrix D a b)

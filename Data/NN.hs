@@ -1,6 +1,6 @@
 module Data.NN where
-
-import qualified Matrix as M
+ 
+import qualified Data.Matrix as M
 import Data.Matrix(Matrix(..)
                   ,(*^)
                   ,(+^)
@@ -22,21 +22,20 @@ sigmoid d = 1 / (1 + (exp (negate d)))
 
 dsigmoid:: Double -> Double
 dsigmoid d = s * (1 - s)
-   where s = R.sigmoid d
+   where s = sigmoid d
 {-# INLINE dsigmoid #-}
 
 {-- 
  - compute the error for weights in I,J using error from layer Q
- - 
  --}
-backProp :: Monad m => Matrix U I J -> Matrix U S J -> Matrix U J Q -> Matrix U Q S -> m (Matrix U J S)
-backProp wij douts wjq ejo = do
-   !ejo' <- wjq `M.mmult` eqo
-   M.d2u $ douts *^ ejo'
+backProp :: Monad m => Matrix U I J -> Matrix U J S -> Matrix U J Q -> Matrix U Q S -> m (Matrix U J S)
+backProp wij dojs wjq eqs = do
+   ejs' <- wjq `M.mmult` eqs
+   M.d2u $ dojs *^ ejs'
 
 calcWeightUpdate :: Monad m => Matrix U I S -> Matrix U J S -> m (Matrix U I J)
-calcWeightUpdate inputs error = inputs `M.mmultT` error
+calcWeightUpdate ins ers = ins `M.mmultT` ers
 
-applyWeightUpdate :: Monad m => Double -> Matrix U I J -> Matrix U I J => m (Matrix U I J)
+applyWeightUpdate :: Monad m => Double -> Matrix U I J -> Matrix U I J -> m (Matrix U I J)
 applyWeightUpdate lr weights update = M.d2u $ (M.map ((*) lr) update) +^ weights
 
