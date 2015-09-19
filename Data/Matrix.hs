@@ -36,7 +36,9 @@ class MatrixOps a b where
    (+^) :: Matrix c a b -> Matrix d a b -> (Matrix D a b)
    (-^) :: Matrix c a b -> Matrix d a b -> (Matrix D a b)
    map :: (Double -> Double) -> Matrix c a b -> (Matrix D a b)
+   cast1 :: Matrix c a b -> Matrix c d b
    cast2 :: Matrix c a b -> Matrix c a d
+   transpose :: Matrix c a b -> Matrix c b a
 
 instance MatrixOps a b where
    mmult (Matrix ab) (Matrix ba) = Matrix <$> (ab `mmultP` ba)
@@ -46,7 +48,9 @@ instance MatrixOps a b where
    (Matrix ab) +^ (Matrix ab') = Matrix (ab R.+^ ab')
    (Matrix ab) -^ (Matrix ab') = Matrix (ab R.-^ ab')
    map f (Matrix ar) = Matrix (R.map f ar)
+   cast1 (Matrix ar) = Matrix ar
    cast2 (Matrix ar) = Matrix ar
+   transpose (Matrix ar) = Matrix <$> (R.transpose2P ar)
 
 {--
  - matrix multiply
