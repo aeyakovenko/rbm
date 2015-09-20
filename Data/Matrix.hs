@@ -41,6 +41,10 @@ class MatrixOps a b where
    transpose :: Monad m => Matrix U a b -> m (Matrix U b a)
    sum :: Monad m =>  Matrix c a b -> m Double
    elems :: Matrix c a b -> Int
+   row :: Matrix c a b -> Int
+   col :: Matrix c a b -> Int
+   newRandomish :: Monad m => (Int,Int) -> (Double,Double) -> Int -> Matrix U a b
+   extractRows :: (Int,Int) -> Matrix c a b -> Matrix D a b 
 
 instance MatrixOps a b where
    mmult (Matrix ab) (Matrix ba) = Matrix <$> (ab `mmultP` ba)
@@ -62,6 +66,18 @@ instance MatrixOps a b where
    sum (Matrix ar) = R.sumAllP ar
    elems (Matrix ar) = (R.col (R.extent ar)) * (R.row (R.extent ar))
    {-# INLINE elems #-}
+   row (Matrix ar) = (R.row (R.extent ar))
+   {-# INLINE row #-}
+   col (Matrix ar) = (R.col (R.extent ar))
+   {-# INLINE col #-}
+   newRandomish (r,c) (minv,maxv) seed = Matrix $ R.randomishDoubleArray (Z :. r :. c) (minv, maxv) seed
+   {-# INLINE newRandomish #-}
+   extractRows (rix,num) mm@(Matrix ar) = R.extract 
+                                          (Z :. rix :. 0) 
+                                          (Z :. num :. (col mm))
+                                          ar
+   {-# INLINE extractRows #-}
+
 
 {--
  - matrix multiply

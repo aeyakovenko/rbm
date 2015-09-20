@@ -13,10 +13,10 @@ import Data.Matrix(Matrix(..)
                   ,D
                   )
 
--- symbolic data types for matrix dimentions
-data I -- number of nodes in row I
-data J -- number of nodes in row J
-data B -- input batch size
+-- | symbolic data types for matrix dimentions
+data I -- ^ number of nodes in row I
+data J -- ^ number of nodes in row J
+data B -- ^ input batch size
 
 type NN = [Matrix U I J]
 
@@ -71,7 +71,9 @@ applyBackProp1 lc (wij,pbj,obi) = do
    wave <- ((*) sz) <$> (M.sum $ M.map abs wij)
    uave <- ((*) sz) <$> (M.sum $ M.map abs lij)
    --scale the updates to the learning rate
-   let lc' = if wave > uave then lc else (wave / uave) * lc 
+   let lc' = if wave > uave || uave == 0 
+               then lc 
+               else (wave / uave) * lc 
    let uij = M.map ((*) (negate lc')) lij
    M.d2u $ wij +^ uij
 {-# INLINE applyBackProp1 #-}
