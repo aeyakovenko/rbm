@@ -21,7 +21,8 @@ data B -- input batch size
 type NN = [Matrix U I J]
 
 feedForward :: Monad m => NN -> Matrix U B I -> m (Matrix U B J)
-feedForward nn ins = M.cast2 <$> foldM (M.cast2 . feedForward1) ins nn
+feedForward nn ins = M.cast2 <$> foldM feed ins nn
+   where feed a b = M.cast2 <$> feedForward1 a b
 {-# INLINE feedForward #-}
 
 backProp :: Monad m => NN -> Double -> Matrix U B I -> Matrix U B J -> m NN 
@@ -35,11 +36,13 @@ backProp nn lc ins tbj = do
    pbj <- backPropOutput (head routsbj) ebj
 
    --hiddel layer backprop results
-   pbjs <- scanM (M.cast2 . backPropHidden) pbj (zip (tail routsbj) rnn)
+   let back pb ons = M.cast2 <$> backPropHidden pb ons
+   pbjs <- scanM back pbj (zip (tail routsbj) rnn)
 
    --apply the backprops
    let fpbjs = reverse pbjs
-   mapM (applyBackProp1 lc) (zip nn fpbjs outs)
+   let inss = ins : (map M.cast2 outs)
+   mapM (applyBackProp1 lc) (zip3 nn fpbjs inss)
 {-# INLINE backProp #-}
 
 mse :: Monad m => Matrix U B J -> m Double
