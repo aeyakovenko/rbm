@@ -12,6 +12,7 @@ module Data.Matrix( Matrix(..)
 import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.Algorithms.Matrix as R
 import qualified Data.Array.Repa.Unsafe as Unsafe
+import qualified Data.Array.Repa.Algorithms.Randomish as R
 import Control.DeepSeq(NFData, rnf)
 import Data.Array.Repa(Array
                       ,U
@@ -45,7 +46,7 @@ class MatrixOps a b where
    col :: Matrix c a b -> Int
    randomish :: (Int,Int) -> (Double,Double) -> Int -> Matrix U a b
    extractRows :: (Int,Int) -> Matrix c a b -> Matrix D a b 
-   zipWith :: (Double -> Double) -> Matrix c a b -> Matrix c a b -> (Matrix D a b)
+   zipWith :: (Double -> Double -> Double) -> Matrix c a b -> Matrix c a b -> (Matrix D a b)
    fromList :: (Int,Int) -> [Double] -> Matrix U a b
    traverse :: (Double -> Int -> Int -> Double) -> Matrix c a b -> Matrix D a b
    toList :: Matrix U a b -> [Double]
@@ -74,13 +75,14 @@ instance MatrixOps a b where
    {-# INLINE row #-}
    col (Matrix ar) = (R.col (R.extent ar))
    {-# INLINE col #-}
-   randomish (r,c) (minv,maxv) seed = Matrix $ R.randomishDoubleArray (Z :. r :. c) (minv, maxv) seed
+   randomish (r,c) (minv,maxv) seed = Matrix $ R.randomishDoubleArray (Z :. r :. c) minv maxv seed
    {-# INLINE randomish #-}
-   extractRows (rix,num) mm@(Matrix ar) = R.extract 
-                                          (Z :. rix :. 0) 
+   extractRows (rix,num) mm@(Matrix ar) = Matrix $ R.extract
+                                          (Z :. rix :. 0)
                                           (Z :. num :. (col mm))
                                           ar
    {-# INLINE extractRows #-}
+
    zipWith f (Matrix aa) (Matrix bb) = Matrix (R.zipWith f aa bb)
    {-# INLINE zipWith #-}
    fromList (r,c) lst = Matrix $ R.fromListUnboxed (Z:.r:.c) lst

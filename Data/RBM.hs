@@ -24,10 +24,6 @@ import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
 --impl modules
 --
-import qualified Data.Array.Repa as R
-import qualified Data.Array.Repa.Unsafe as Unsafe
-import qualified Data.Array.Repa.Algorithms.Randomish as R
-import qualified Data.Array.Repa.Algorithms.Matrix as R
 import System.Random(RandomGen
                     ,random
                     ,randomRs
@@ -47,8 +43,6 @@ import Data.Matrix(Matrix(..)
                   ,U
                   ,D
                   )
-
-
 
 data H -- ^ num hidden nodes
 data I -- ^ num input nodes
