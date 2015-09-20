@@ -9,6 +9,9 @@ module Data.RBM(rbm
                ,Params(..)
                ,params
                ,RBM
+               ,B
+               ,I
+               ,H
                ,perf
                ,test
                ,run_prop_learned

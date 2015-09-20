@@ -1,10 +1,11 @@
 cabal_files=rbm.cabal
 tix_files=perf-repa-RBM.tix
 
-hs_files=RBM/List.hs\
-			RBM/Repa.hs\
-			RBM/Proto.hs\
-			Data/Mnist.hs
+hs_files=Data/RBM.hs\
+			Data/NN.hs\
+			Data/Matrix.hs\
+			Data/DBN.hs\
+			Test/Mnist.hs
 
 tix_files=perf-repa-RBM.tix\
 			 trainbatches.tix\
