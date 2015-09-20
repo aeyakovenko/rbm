@@ -5,7 +5,7 @@ hs_files=Data/RBM.hs\
 			Data/NN.hs\
 			Data/Matrix.hs\
 			Data/DBN.hs\
-			Test/Mnist.hs
+			Examples/Mnist.hs
 
 tix_files=perf-repa-RBM.tix\
 			 trainbatches.tix\
@@ -34,9 +34,6 @@ mnist:tix
 	cabal build mnist-DBN
 	./dist/build/mnist-DBN/mnist-DBN +RTS -N
 
-console:tix
-	cabal build console
-
 batches:tix
 	cabal build testbatches
 	cabal build trainbatches
@@ -55,18 +52,27 @@ dist/setup-config:$(cabal_files) Makefile
 	cabal configure --enable-coverage --enable-tests
 	@touch $@
 
-data: train-images-idx3-ubyte.gz train-labels-idx1-ubyte.gz t10k-images-idx3-ubyte.gz t10k-labels-idx1-ubyte.gz
+DATA=dist/train-images-idx3-ubyte.gz \
+	  dist/train-labels-idx1-ubyte.gz \
+	  dist/t10k-images-idx3-ubyte.gz \
+	  dist/t10k-labels-idx1-ubyte.gz
 
-train-images-idx3-ubyte.gz:
-	wget http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz
+data:$(DATA)
 
-train-labels-idx1-ubyte.gz:
-	wget http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz
+dist/train-images-idx3-ubyte.gz:
+	mkdir -p $(@D)
+	cd dist && wget http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz
 
-t10k-images-idx3-ubyte.gz:
-	wget http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz
+dist/train-labels-idx1-ubyte.gz:
+	mkdir -p $(@D)
+	cd dist && wget http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz
 
-t10k-labels-idx1-ubyte.gz:
-	wget http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz
+dist/t10k-images-idx3-ubyte.gz:
+	mkdir -p $(@D)
+	cd dist && wget http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz
+
+dist/t10k-labels-idx1-ubyte.gz:
+	mkdir -p $(@D)
+	cd dist && wget http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz
 
 $$%:;@$(call true)$(info $(call or,$$$*))
