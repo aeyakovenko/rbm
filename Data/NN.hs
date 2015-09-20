@@ -14,64 +14,66 @@ import Data.Matrix(Matrix(..)
 -- symbolic data types for matrix dimentions
 data I -- number of nodes in row I
 data J -- number of nodes in row J
-data Q -- number of nodes in row Q
 data B -- input batch size
 
 type NN = [Matrix U I J]
 
-feedForward :: Monad m => NN -> Matrix U B I -> m (Matrix U B I)
-feedForward nn ins = foldM feedForward1 ins nn
+feedForward :: Monad m => NN -> Matrix U B I -> m (Matrix U B J)
+feedForward nn ins = M.cast2 <$> foldM (M.cast2 . feedForward1) ins nn
 
-backProp :: Monad m => NN -> Double -> Matrix U B I -> Matrix U B Q -> NN 
-backProp nn lc ins ebq = do
-   outsbi <- scanForwardR ins nn
-   let nnjq = map (M.cast1 . M.cast2) nn 
+backProp :: Monad m => NN -> Double -> Matrix U B I -> Matrix U B J -> m NN 
+backProp nn lc ins tbj = do
+   outs <- scanForward ins nn
+   let routsbj = map M.cast2 $ reverse outs
+   let rnn = reverse nn
 
    --output layer backprop
-   let doutbi = M.map disigmoid $ head outsbi
-   let pbq = (M.cast2 doutbi) ^* ebq
-   pqb <- M.transpose pbq
+   ebj <- error (head routsbj) tbj
+   pbj <- backPropOutput (head routsbj) ebj
 
    --hiddel layer backprop results
-   pqbs <- scanMR backPropFold pqb $ (zip outsbi (reverse nnjq))
+   pbjs <- scanM (M.cast2 . backPropHidden) pbj (zip (tail routsbj) rnn)
 
    --apply the backprops
-   let pjbs = map M.cast1 $ reverse $ pqb:pqbs
-   let apply (wij,pjb,obi) = do
-         lji <- (M.cast2 pjb) `M.mmult` obi
-         let uji <- M.map ((*) (negate lc)) lji
-         uij <- M.transpose uji
-         d2u $ wij ^+ uij
-   mapM appy (zip nn pjbs outsbi)
+   let fpbjs = reverse pbjs
+   mapM (applyBackProp1 lc) (zip nn fpbjs outs)
+
+{--
+ - compute error
+ --}
+error :: Monad m => Matrix U B J -> Matrix U B J -> m Matrix U B J
+error obj tbj = d2u $ obj -^ tbj
+
+applyBackProp1 :: Monad m => Double -> (Matrix U I J, Matrix U B J, Matrix U B I) -> m (Matrix U I J)
+applyBackPriop1 lc (wij,pbj,obi) = do
+   lij <- obi `M.mmultT` (M.cast2 pbj)
+   let uij = M.map ((*) (negate lc)) lij
+   d2u $ wij ^+ uij
+
+backPropOutput :: Monad m => Matrix U B J -> Matrix U B J -> Matrix U B J
+backPropOutput obj ebj = ebj ^* obj
 
 --calculate the  backprop for the hidden layers
-backPropFold :: Monad m => Matrix U Q B -> (Matrix U B J, Matrix U J Q) -> Matrix U Q B
-backPropFold eqb obj wjq = do
-   ejb <- wjq `M.mmult` eqb
-   dbj <- M.map dsigmoid obj
-   djb <- M.transpose dbj
-   M.cast1 <$> (M.d2u $ djb *^ ejb)
-{-- 
- - compute the error for weights in I,J using error from layer Q
- --}
-backProp1 :: Monad m => Matrix U I J -> Matrix U J B -> Matrix U J Q -> Matrix U Q B -> m (Matrix U J B)
-backProp1 wij dojb wjq eqb = do
-   ejb <- wjq `M.mmult` eqb
-   M.d2u $ dojb *^ ejb
+backPropHidden :: Monad m => Matrix U B J -> (Matrix U B I, Matrix U I J) -> Matrix U B I
+backPropHidden ebq obi wij = do
+   ebj <- transpose =<< wij `M.mmultT` ebj
+   let dbi = M.map dsigmoid obi
+   M.d2u $ dbi *^ (M.cast2 ebj)
 
-scanForwardR :: Monad m => Matrix U B I -> NN -> m ([Matrix U B I])
-scanForwardR ins nn = scanMR [] feedForward' ins nn
+scanForward :: Monad m => Matrix U B I -> NN -> m ([Matrix U B J])
+scanForward ins nn = M.cast2 <$> scanM (M.cast2 . feedForward1) ins nn
 
-feedForward1 :: Monad m => Matrix U B I -> Matrix U I J -> m (Matrix U B I)
+feedForward1 :: Monad m => Matrix U B I -> Matrix U I J -> m (Matrix U B J)
 feedForward1 !ibi wij = do
    sbj <- ibi `M.mmult` wij
-   M.cast2 <$> (M.d2u $ M.map sigmoid sbj)
+   M.d2u $ M.map sigmoid sbj
 
-scanMR :: (Monad m) =>  [a] -> (a -> b -> m a) -> a -> [b] -> m [a]
-scanMR acc _ _ _ =  return acc
-scanMR aac f a ls = do 
+scanM :: (Monad m) =>  (a -> b -> m a) -> a -> [b] -> m [a]
+scanM _ a _ =  return [a]
+scanM f a ls = do 
    item <- f a (head ls)
-   scanMR (item:aac) f item ls
+   rest <- scanM f item (tail ls)
+   return (a:rest)
 
 
 calcWeightUpdate :: Monad m => Matrix U I B -> Matrix U J B -> m (Matrix U I J)
