@@ -7,6 +7,7 @@ import Control.Monad(foldM)
 import Data.Matrix(Matrix(..)
                   ,(*^)
                   ,(+^)
+                  ,(-^)
                   ,U
                   ,D
                   )
@@ -49,15 +50,15 @@ mse errm = do
 {--
  - compute error
  --}
-errorMatrix :: Monad m => Matrix U B J -> Matrix U B J -> m Matrix U B J
-errorMatrix obj tbj = d2u $ obj -^ tbj
-{-# INLINE calcError #-}
+errorMatrix :: Monad m => Matrix U B J -> Matrix U B J -> m (Matrix U B J)
+errorMatrix obj tbj = M.d2u $ obj -^ tbj
+{-# INLINE errorMatrix #-}
 
 {--
  - apply backprop to the NN
  --}
 applyBackProp1 :: Monad m => Double -> (Matrix U I J, Matrix U B J, Matrix U B I) -> m (Matrix U I J)
-applyBackPriop1 lc (wij,pbj,obi) = do
+applyBackProp1 lc (wij,pbj,obi) = do
    lij <- obi `M.mmultT` (M.cast2 pbj)
    let sz = 1.0 / (fromIntegral $ M.elems wij)
 
@@ -68,22 +69,23 @@ applyBackPriop1 lc (wij,pbj,obi) = do
    let lc' = if wave > uave then lc else (wave / uave) * lc 
    let uij = M.map ((*) (negate lc')) lij
    M.d2u $ wij +^ uij
-{-# INLINE applyBackPriop1 #-}
+{-# INLINE applyBackProp1 #-}
 
-backPropOutput :: Monad m => Matrix U B J -> Matrix U B J -> Matrix U B J
+backPropOutput :: Monad m => Matrix U B J -> Matrix U B J -> m (Matrix U B J)
 backPropOutput obj ebj = ebj *^ obj
 {-# INLINE backPropOutput #-}
 
 --calculate the  backprop for the hidden layers
-backPropHidden :: Monad m => Matrix U B J -> (Matrix U B I, Matrix U I J) -> Matrix U B I
-backPropHidden ebj obi wij = do
+backPropHidden :: Monad m => Matrix U B J -> (Matrix U B I, Matrix U I J) -> m (Matrix U B I)
+backPropHidden ebj (obi,wij) = do
    ebj <- M.transpose =<< wij `M.mmultT` ebj
    let dbi = M.map dsigmoid obi
    M.d2u $ dbi *^ (M.cast2 ebj)
 {-# INLINE backPropHidden #-}
 
 scanForward :: Monad m => Matrix U B I -> NN -> m ([Matrix U B J])
-scanForward ins nn = M.cast2 <$> scanM (M.cast2 . feedForward1) ins nn
+scanForward ins nns = (map M.cast2) <$> scanM feed ins nns
+   where feed ii nn = M.cast2 <$> feedForward1 ii nn
 {-# INLINE scanForward #-}
 
 feedForward1 :: Monad m => Matrix U B I -> Matrix U I J -> m (Matrix U B J)
@@ -93,7 +95,7 @@ feedForward1 !ibi wij = do
 {-# INLINE feedForward1 #-}
 
 scanM :: (Monad m) =>  (a -> b -> m a) -> a -> [b] -> m [a]
-scanM _ a _ =  return [a]
+scanM _ a [] =  return [a]
 scanM f a ls = do 
    item <- f a (head ls)
    rest <- scanM f item (tail ls)
