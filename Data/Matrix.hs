@@ -43,10 +43,12 @@ class MatrixOps a b where
    sum :: Monad m =>  Matrix c a b -> m Double
    elems :: Matrix c a b -> Int
    elems m = (row m) * (col m)
+   {-# INLINE elems #-}
    row :: Matrix c a b -> Int
    col :: Matrix c a b -> Int
    shape :: Matrix c a b -> (Int,Int)
    shape m = (row m, col m)
+   {-# INLINE shape #-}
    randomish :: (Int,Int) -> (Double,Double) -> Int -> Matrix U a b
    extractRows :: (Int,Int) -> Matrix c a b -> Matrix D a b 
    zipWith :: (Double -> Double -> Double) -> Matrix c a b -> Matrix c a b -> (Matrix D a b)

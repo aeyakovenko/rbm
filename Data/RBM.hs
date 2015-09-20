@@ -221,7 +221,7 @@ regenerate rand rb hidden = do
 randomIxB :: (Monad m) => Int -> (Int,Int) -> m (Matrix U I B)
 randomIxB rseed sh = M.d2u $ M.traverse set rands
    where
-      rands = M.randomish sh 0 1 rseed
+      rands = M.randomish sh (0,1) rseed
       set _ 0 _ = 0
       set vv _ _ = vv
 {-# INLINE randomIxB #-}
@@ -229,7 +229,7 @@ randomIxB rseed sh = M.d2u $ M.traverse set rands
 randomHxB :: (Monad m) => Int -> (Int,Int) -> m (Matrix U H B)
 randomHxB rseed sh = M.d2u $ M.traverse set rands 
    where
-      rands = M.randomish sh 0 1 rseed
+      rands = M.randomish sh (0,1) rseed
       set _ 0 _ = 0
       set vv _ _ = vv
 {-# INLINE randomHxB #-}
@@ -303,7 +303,7 @@ prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
 prop_hiddenProbs gen ni nh = runIdentity $ do
    let rb = rbm (mkStdGen gen) (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-       input = M.randomish (1, (fi ni)) 0 1 gen
+       input = M.randomish (1, (fi ni)) (0,1) gen
    pp <- hiddenProbs rb input
    return $ (fi nh) == (M.row pp)
 
@@ -321,7 +321,7 @@ prop_hiddenProbs2 = runIdentity $ do
 
 prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
 prop_inputProbs gen ni nh = runIdentity $ do
-   let hidden = M.randomish (1,(fi nh)) 0 1 gen
+   let hidden = M.randomish (1,(fi nh)) (0,1) gen
        rb = rbm (mkStdGen gen) (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
    rb' <- M.transpose rb
@@ -345,7 +345,7 @@ prop_inputProbs2 = runIdentity $ do
 
 prop_energy :: Int -> Word8 -> Word8 -> Bool
 prop_energy gen ni nh = runIdentity $ do
-   let input = M.randomish (1 , (fi ni)) 0 1 gen
+   let input = M.randomish (1, (fi ni)) (0,1) gen
        rb = rbm (mkStdGen gen) (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
    ee <- energy rb input
