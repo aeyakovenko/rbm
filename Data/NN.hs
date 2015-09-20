@@ -67,17 +67,17 @@ applyBackPriop1 lc (wij,pbj,obi) = do
    --scale the updates to the learning rate
    let lc' = if wave > uave then lc else (wave / uave) * lc 
    let uij = M.map ((*) (negate lc')) lij
-   d2u $ wij ^+ uij
+   M.d2u $ wij +^ uij
 {-# INLINE applyBackPriop1 #-}
 
 backPropOutput :: Monad m => Matrix U B J -> Matrix U B J -> Matrix U B J
-backPropOutput obj ebj = ebj ^* obj
+backPropOutput obj ebj = ebj *^ obj
 {-# INLINE backPropOutput #-}
 
 --calculate the  backprop for the hidden layers
 backPropHidden :: Monad m => Matrix U B J -> (Matrix U B I, Matrix U I J) -> Matrix U B I
-backPropHidden ebq obi wij = do
-   ebj <- transpose =<< wij `M.mmultT` ebj
+backPropHidden ebj obi wij = do
+   ebj <- M.transpose =<< wij `M.mmultT` ebj
    let dbi = M.map dsigmoid obi
    M.d2u $ dbi *^ (M.cast2 ebj)
 {-# INLINE backPropHidden #-}

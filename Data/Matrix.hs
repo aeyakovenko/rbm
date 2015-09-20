@@ -47,14 +47,21 @@ instance MatrixOps a b where
    mmultT (Matrix ab) (Matrix ab') = Matrix <$> (ab `mmultTP` ab')
    d2u (Matrix ar) = Matrix <$> (R.computeP ar)
    (Matrix ab) *^ (Matrix ab') = Matrix (ab R.*^ ab')
+   {-# INLINE (*^) #-}
    (Matrix ab) +^ (Matrix ab') = Matrix (ab R.+^ ab')
+   {-# INLINE (+^) #-}
    (Matrix ab) -^ (Matrix ab') = Matrix (ab R.-^ ab')
+   {-# INLINE (-^) #-}
    map f (Matrix ar) = Matrix (R.map f ar)
+   {-# INLINE map #-}
    cast1 (Matrix ar) = Matrix ar
+   {-# INLINE cast1 #-}
    cast2 (Matrix ar) = Matrix ar
+   {-# INLINE cast2 #-}
    transpose (Matrix ar) = Matrix <$> (R.transpose2P ar)
    sum (Matrix ar) = R.sumAllP ar
    elems (Matrix ar) = (R.col (R.extent ar)) * (R.row (R.extent ar))
+   {-# INLINE elems #-}
 
 {--
  - matrix multiply
