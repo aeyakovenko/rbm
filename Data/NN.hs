@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Data.NN where
  
 import qualified Data.Matrix as M
@@ -41,7 +42,7 @@ backProp nn lc ins tbj = do
    mapM (applyBackProp1 lc) (zip nn fpbjs outs)
 {-# INLINE backProp #-}
 
-mse :: Matrix U B J -> m Double
+mse :: Monad m => Matrix U B J -> m Double
 mse errm = do 
    terr <- M.sum $ M.map (\ x -> x ** 2) errm
    return (terr/(fromIntegral $ M.elems errm))
@@ -59,12 +60,13 @@ errorMatrix obj tbj = M.d2u $ obj -^ tbj
  --}
 applyBackProp1 :: Monad m => Double -> (Matrix U I J, Matrix U B J, Matrix U B I) -> m (Matrix U I J)
 applyBackProp1 lc (wij,pbj,obi) = do
-   lij <- obi `M.mmultT` (M.cast2 pbj)
-   let sz = 1.0 / (fromIntegral $ M.elems wij)
+   oib <- M.transpose obi
+   lij <- oib `M.mmult` pbj
+   let sz :: Double = 1.0 / (fromIntegral $ M.elems wij)
 
    --calculate the average weight and average update
-   wave <- ((*) sz) <$> M.sum $ M.map abs wij 
-   uave <- ((*) sz) <$> M.sum $ M.map abs lij 
+   wave <- ((*) sz) <$> (M.sum $ M.map abs wij)
+   uave <- ((*) sz) <$> (M.sum $ M.map abs lij)
    --scale the updates to the learning rate
    let lc' = if wave > uave then lc else (wave / uave) * lc 
    let uij = M.map ((*) (negate lc')) lij
@@ -72,7 +74,7 @@ applyBackProp1 lc (wij,pbj,obi) = do
 {-# INLINE applyBackProp1 #-}
 
 backPropOutput :: Monad m => Matrix U B J -> Matrix U B J -> m (Matrix U B J)
-backPropOutput obj ebj = ebj *^ obj
+backPropOutput obj ebj = M.d2u $ ebj *^ obj
 {-# INLINE backPropOutput #-}
 
 --calculate the  backprop for the hidden layers
