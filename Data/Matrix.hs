@@ -38,35 +38,23 @@ class MatrixOps a b where
    map :: (Double -> Double) -> Matrix c a b -> (Matrix D a b)
    cast1 :: Matrix c a b -> Matrix c d b
    cast2 :: Matrix c a b -> Matrix c a d
-   transpose :: Matrix c a b -> Matrix c b a
+   transpose :: Monad m => Matrix U a b -> m (Matrix U b a)
    sum :: Monad m =>  Matrix c a b -> m Double
    elems :: Matrix c a b -> Int
 
 instance MatrixOps a b where
    mmult (Matrix ab) (Matrix ba) = Matrix <$> (ab `mmultP` ba)
-{-# INLINE mmult #-}
    mmultT (Matrix ab) (Matrix ab') = Matrix <$> (ab `mmultTP` ab')
-{-# INLINE mmultT #-}
    d2u (Matrix ar) = Matrix <$> (R.computeP ar)
-{-# INLINE d2u #-}
    (Matrix ab) *^ (Matrix ab') = Matrix (ab R.*^ ab')
-{-# INLINE *^ #-}
    (Matrix ab) +^ (Matrix ab') = Matrix (ab R.+^ ab')
-{-# INLINE +^ #-}
    (Matrix ab) -^ (Matrix ab') = Matrix (ab R.-^ ab')
-{-# INLINE -^ #-}
    map f (Matrix ar) = Matrix (R.map f ar)
-{-# INLINE map #-}
    cast1 (Matrix ar) = Matrix ar
-{-# INLINE cast1 #-}
    cast2 (Matrix ar) = Matrix ar
-{-# INLINE cast2 #-}
    transpose (Matrix ar) = Matrix <$> (R.transpose2P ar)
-{-# INLINE transpose #-}
    sum (Matrix ar) = R.sumAllP ar
-{-# INLINE sum #-}
    elems (Matrix ar) = (R.col (R.extent ar)) * (R.row (R.extent ar))
-{-# INLINE elems #-}
 
 {--
  - matrix multiply

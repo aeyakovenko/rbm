@@ -43,7 +43,7 @@ backProp nn lc ins tbj = do
 mse :: Matrix U B J -> m Double
 mse errm = do 
    terr <- M.sum $ M.map (\ x -> x ** 2) errm
-   return (terr/(fromIntegral $ M.size errm))
+   return (terr/(fromIntegral $ M.elems errm))
 {-# INLINE mse #-}
 
 {--
