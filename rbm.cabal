@@ -6,8 +6,7 @@ Build-Type:          Simple
 Cabal-Version:       >=1.2
 
 Library
-  exposed-modules:   RBM.List, RBM.Repa
-  extensions:        BangPatterns
+  exposed-modules:   Data.RBM, Data.DBN, Data.NN, Data.Matrix
   Build-Depends:     base,
                      random,
                      split,
@@ -42,6 +41,7 @@ Executable mnist-DBN
                      zlib,
                      binary
 
+--mnist data generation
 Executable trainbatches
     main-is:         Data/Mnist.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateTrainBatches
