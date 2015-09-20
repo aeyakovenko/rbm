@@ -68,7 +68,7 @@ params = Params 0.01 0.001 10 10000 5 0
 
 -- |create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
-rbm r ni nh = M.newRandomish (nh, ni) (-0.01, 0.01) (fst $ random r)
+rbm r ni nh = M.randomish (nh, ni) (-0.01, 0.01) (fst $ random r)
 
 infinity :: Double
 infinity = read "Infinity"
@@ -94,7 +94,7 @@ learn prm rb batches = do
                 rbxi = head $ drop (head $ randomRs (0::Int, (length batches)) r1) ins
                 par = prm { seed = (fst $ random r1) }
             bxi <- rbxi
-            let nbnum = bnum + (R.row bxi)
+            let nbnum = bnum + (M.row bxi)
             nrb <- batch par crb [return bxi]
             loop nbnum nrb mse r2
        rr = (mkStdGen $ seed prm)
@@ -121,7 +121,7 @@ energy rb bxi = do
 hiddenProbs :: (Monad m) => RBM -> (Matrix U B I) -> m (Matrix U H B)
 hiddenProbs wws iis = do
    !hxb <- wws `M.mmultT` iis
-   R.d2u $ R.map sigmoid hxb
+   M.d2u $ M.map sigmoid hxb
 {-# INLINE hiddenProbs #-}
 
 {-|
@@ -133,10 +133,10 @@ hiddenProbs wws iis = do
  - map sigmoid $ (transpose inputs) `mmult` weights
  -
  --}
-inputProbs :: (Monad m) => (Matrix I H) -> (Matrix U B H) -> m (Matrix U I B)
+inputProbs :: (Monad m) => (Matrix U I H) -> (Matrix U B H) -> m (Matrix U I B)
 inputProbs wws hhs = do
    !ixb <- wws `M.mmultT` hhs
-   d2u $ R.map sigmoid ixb
+   M.d2u $ M.map sigmoid ixb
 {-# INLINE inputProbs #-}
 
  -- |given a batch of unbiased inputs, update the rbm weights from the batch at once
@@ -188,9 +188,9 @@ reconErr rand hxi mbxis = do
          bxh <- M.transpose hxb
          ixh <- M.transpose hxi
          ixb <- regenerate rand ixh bxh
-         bxi' <- M.transpose2P ixb
+         bxi' <- M.transpose ixb
          wd <- M.d2u $ bxi' -^ bxi
-         !mse <- M.sum $ R.map (\ xx -> xx ** 2) wd
+         !mse <- M.sum $ M.map (\ xx -> xx ** 2) wd
          let sz = 1 + (M.elems wd)
          return (total +  (mse / (fromIntegral sz)))
    !mse <- foldM loop 0 mbxis
@@ -207,19 +207,19 @@ generate :: (Monad m, RandomGen r) => r -> Matrix U H I -> Matrix U B I -> m (Ma
 generate rand rb biased = do
    hhs <- hiddenProbs rb biased
    rands <- randomHxB (fst $ random rand) ((M.row hhs),(M.col hhs))
-   d2u $ M.zipWith checkP hhs rands
+   M.d2u $ M.zipWith checkP hhs rands
 {-# INLINE generate #-}
 
 -- given a batch of biased hidden layer samples, generate a batch of biased input layer samples
 regenerate :: (Monad m, RandomGen r) => r -> Matrix U I H -> Matrix U B H -> m (Matrix U I B)
 regenerate rand rb hidden = do
    iis <- inputProbs rb hidden
-   rands <- randomIxB (fst $ random rand) (R.extent iis)
-   d2u $ R.zipWith checkP iis rands
+   rands <- randomIxB (fst $ random rand) (M.shape iis)
+   M.d2u $ M.zipWith checkP iis rands
 {-# INLINE regenerate #-}
 
 randomIxB :: (Monad m) => Int -> (Int,Int) -> m (Matrix U I B)
-randomIxB rseed sh = d2u $ M.traverse set rands
+randomIxB rseed sh = M.d2u $ M.traverse set rands
    where
       rands = M.randomish sh 0 1 rseed
       set _ 0 _ = 0
@@ -227,7 +227,7 @@ randomIxB rseed sh = d2u $ M.traverse set rands
 {-# INLINE randomIxB #-}
 
 randomHxB :: (Monad m) => Int -> (Int,Int) -> m (Matrix U H B)
-randomHxB rseed sh = d2u $ M.traverse set rands 
+randomHxB rseed sh = M.d2u $ M.traverse set rands 
    where
       rands = M.randomish sh 0 1 rseed
       set _ 0 _ = 0
@@ -345,7 +345,7 @@ prop_inputProbs2 = runIdentity $ do
 
 prop_energy :: Int -> Word8 -> Word8 -> Bool
 prop_energy gen ni nh = runIdentity $ do
-   let input = R.randomishDoubleArray (Z :. 1 :. (fi ni)) 0 1 gen
+   let input = M.randomish (1 , (fi ni)) 0 1 gen
        rb = rbm (mkStdGen gen) (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
    ee <- energy rb input

@@ -42,8 +42,11 @@ class MatrixOps a b where
    transpose :: Monad m => Matrix U a b -> m (Matrix U b a)
    sum :: Monad m =>  Matrix c a b -> m Double
    elems :: Matrix c a b -> Int
+   elems m = (row m) * (col m)
    row :: Matrix c a b -> Int
    col :: Matrix c a b -> Int
+   shape :: Matrix c a b -> (Int,Int)
+   shape m = (row m, col m)
    randomish :: (Int,Int) -> (Double,Double) -> Int -> Matrix U a b
    extractRows :: (Int,Int) -> Matrix c a b -> Matrix D a b 
    zipWith :: (Double -> Double -> Double) -> Matrix c a b -> Matrix c a b -> (Matrix D a b)
@@ -69,8 +72,6 @@ instance MatrixOps a b where
    {-# INLINE cast2 #-}
    transpose (Matrix ar) = Matrix <$> (R.transpose2P ar)
    sum (Matrix ar) = R.sumAllP ar
-   elems (Matrix ar) = (R.col (R.extent ar)) * (R.row (R.extent ar))
-   {-# INLINE elems #-}
    row (Matrix ar) = (R.row (R.extent ar))
    {-# INLINE row #-}
    col (Matrix ar) = (R.col (R.extent ar))
