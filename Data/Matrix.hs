@@ -11,6 +11,7 @@ module Data.Matrix( Matrix(..)
                   , B
                   , I
                   , H
+                  , test
                   ) where
 
 import System.Exit (exitFailure)
@@ -183,7 +184,7 @@ prop_splitRows xx yy zz = (toList mm) == (concatMap toList splitted)
    where rr = abs xx + 1
          cc = abs yy + 1
          ss = abs zz + 1
-         num = ceiling $ (fromIntegral rr) / (fromIntegral ss)
+         num = ceiling $ ((fromIntegral rr)::Double) / (fromIntegral ss)
          mm = fromList (rr,cc) $ P.map fromIntegral [1..(rr * cc)]
          splitted = runIdentity $ mapM d2u (splitRows ss mm)
    

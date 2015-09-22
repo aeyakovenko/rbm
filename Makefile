@@ -30,6 +30,9 @@ dist/cabal.build.ok:$(hs_files) dist/setup-config tix
 clean:tix
 	cabal clean
 
+test:tix
+	cabal test 2>&1
+
 mnist:tix
 	cabal build mnist-DBN
 	./dist/build/mnist-DBN/mnist-DBN +RTS -N

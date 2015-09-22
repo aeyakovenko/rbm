@@ -145,24 +145,21 @@ batch par ixh ins = foldM (weightUpdate par) ixh ins
 
 -- |given an unbiased input batch, generate the the RBM weight updates
 weightUpdate:: (Monad m) => Params-> Matrix U I H -> m (Matrix U B I) -> m (Matrix U I H)
-weightUpdate par ixh mbxi = do
-   bxi <- mbxi
-   let rows = M.row bxi
-       rand = mkStdGen (seed par)
-       loop rbm' (rr,rix) = do
-            let sz | ((miniBatch par) + rix) > rows = rows - rix
-                   | otherwise = (miniBatch par)
-                vxi = M.extractRows (rix,sz) bxi
-            bxi' <- M.d2u vxi
+weightUpdate par ixh mbigbatch = do
+   !bigbatch <- mbigbatch
+   let rand = mkStdGen (seed par)
+       loop rbm' (rr,bxi) = do
+            !bxi' <- M.d2u bxi
             !wd <- weightDiff rr rbm' bxi'
-            !diffsum <- M.sum $ M.map abs wd
-            !weightsum <- M.sum $ M.map abs ixh
-            let lrate'
-                  | diffsum == 0 = rate par
-                  | otherwise = (rate par) * weightsum / diffsum
-            let wd' = M.map ((*) lrate') wd
+            !uave <- M.sum $ M.map abs wd
+            !wave <- M.sum $ M.map abs ixh
+            let lc = rate par
+                lc' = if wave > uave || uave == 0 
+                        then lc 
+                        else (wave / uave) * lc 
+            let wd' = M.map ((*) lc') wd
             M.d2u $ rbm' +^ wd'
-   foldM loop ixh $ zip (splits rand) [0..((rows) `div` (miniBatch par))]
+   foldM loop ixh $ zip (splits rand) (M.splitRows (miniBatch par) bigbatch)
 {-# INLINE weightUpdate #-}
 
 weightDiff :: (Monad m, RandomGen r) => r -> Matrix U I H -> Matrix U B I -> m (Matrix U I H)
