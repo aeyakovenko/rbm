@@ -13,6 +13,12 @@ module Data.Matrix( Matrix(..)
                   , H
                   ) where
 
+import System.Exit (exitFailure)
+import Test.QuickCheck(verboseCheckWithResult)
+import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
+import Control.Monad.Identity(runIdentity)
+
+import Prelude as P
 import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.Algorithms.Matrix as R
 import qualified Data.Array.Repa.Unsafe as Unsafe
@@ -35,6 +41,8 @@ data B -- ^ batch size
 -- | wraps the Repa Array types so we can typecheck the results of
 -- | the matrix operations
 data Matrix d a b = R.Source d Double => Matrix (Array d DIM2 Double)
+instance Show (Matrix U a b) where
+   show m = show $ toList m
 
 instance NFData (Matrix U a b) where
    rnf (Matrix ar) = ar `R.deepSeqArray` ()
@@ -99,12 +107,19 @@ class MatrixOps a b where
    randomish (r,c) (minv,maxv) seed = Matrix $ R.randomishDoubleArray (Z :. r :. c) minv maxv seed
    {-# INLINE randomish #-}
 
-   extractRows :: (Int,Int) -> Matrix c a b -> Matrix D a b 
-   extractRows (rix,num) mm@(Matrix ar) = Matrix $ R.extract
+   extractRows :: Matrix c a b -> (Int,Int) -> Matrix D a b 
+   extractRows mm@(Matrix ar) (rix,num) = Matrix $ R.extract
                                           (Z :. rix :. 0)
                                           (Z :. num :. (col mm))
                                           ar
    {-# INLINE extractRows #-}
+   splitRows :: Int -> Matrix c a b -> [Matrix D a b]
+   splitRows nr mm = P.map (extractRows mm) chunks
+      where chunks = P.map maxn $ zip rixs (repeat nr)
+            maxn (rix,num) 
+               | rix + num > (row mm) = (rix, (row mm) - rix)
+               | otherwise = (rix, num)
+            rixs = [0,nr..(row mm)-1]
 
 
    zipWith :: (Double -> Double -> Double) -> Matrix c a b -> Matrix c a b -> (Matrix D a b)
@@ -162,3 +177,19 @@ mmultP arr brr
  = do   trr <- R.transpose2P brr
         mmultTP arr trr
 
+prop_splitRows :: Int -> Int -> Int -> Bool
+prop_splitRows xx yy zz = (toList mm) == (concatMap toList splitted)
+                       && num == (length splitted)
+   where rr = abs xx + 1
+         cc = abs yy + 1
+         ss = abs zz + 1
+         num = ceiling $ (fromIntegral rr) / (fromIntegral ss)
+         mm = fromList (rr,cc) $ P.map fromIntegral [1..(rr * cc)]
+         splitted = runIdentity $ mapM d2u (splitRows ss mm)
+   
+test :: IO ()
+test =  do
+   let check rr = if (isSuccess rr) then return () else exitFailure
+       cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
+       runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
+   runtest "splitRows"  prop_splitRows
