@@ -14,12 +14,12 @@ import qualified Data.RBM as RBM
 import qualified Data.Matrix as M
 import Data.Matrix(Matrix(..)
                   ,U
+                  ,B
+                  ,I
+                  ,H
                   )
 import Data.RBM(RBM
                ,rbm
-               ,B
-               ,I
-               ,H
                )
 import System.Random(RandomGen
                     ,split
@@ -72,8 +72,8 @@ learnLast batches pars (!nrb:rest) = do
        gen :: Monad m => RBM.RBM -> m (Matrix U B I) -> m (Matrix U B I)
        gen rb mbxi = do
          !bxi <- mbxi
-         !hxb <- RBM.hiddenProbs rb bxi
-         M.cast2 <$> M.transpose hxb
+         !bxh <- RBM.hiddenProbs rb bxi
+         return $ M.cast2 bxh 
    let mbxi = map (gen nrb) batches
    nrbms <- learnLast mbxi npars rest
    return $ nrb : nrbms
@@ -84,8 +84,8 @@ learnLast batches pars (!nrb:rest) = do
 generate :: (Functor m, Monad m, RandomGen r) => r -> DBN -> Matrix U B I -> m (Matrix U B H)
 generate _ [] pb = return $ M.cast2 pb
 generate rand (rb:rest) pb = do 
-   hxb <- RBM.hiddenProbs rb pb
-   bxi <- M.cast2 <$> M.transpose hxb
+   bxh <- RBM.hiddenProbs rb pb
+   let bxi = M.cast2 bxh
    generate rand rest bxi
 {-# INLINE generate #-}
 
@@ -98,8 +98,7 @@ regenerate r dbn' bxh = regenerate' r (reverse dbn') bxh
 
 regenerate' :: (Functor m, Monad m, RandomGen r) => r -> DBN -> (Matrix U B H) ->  m (Matrix U B I)
 regenerate' _ [] pb = return $ M.cast2 pb
-regenerate' rand (rb:rest) pb = do 
-   ixh <- M.transpose rb
+regenerate' rand (ixh:rest) pb = do 
    ixb <- RBM.inputProbs ixh pb
    bxh <- M.cast2 <$> M.transpose ixb
    regenerate' rand rest bxh

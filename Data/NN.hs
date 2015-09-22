@@ -11,21 +11,19 @@ import Data.Matrix(Matrix(..)
                   ,(-^)
                   ,U
                   ,D
+                  ,I
+                  ,B
+                  ,H
                   )
 
--- | symbolic data types for matrix dimentions
-data I -- ^ number of nodes in row I
-data J -- ^ number of nodes in row J
-data B -- ^ input batch size
+type NN = [Matrix U I H]
 
-type NN = [Matrix U I J]
-
-feedForward :: Monad m => NN -> Matrix U B I -> m (Matrix U B J)
+feedForward :: Monad m => NN -> Matrix U B I -> m (Matrix U B H)
 feedForward nn ins = M.cast2 <$> foldM feed ins nn
    where feed a b = M.cast2 <$> feedForward1 a b
 {-# INLINE feedForward #-}
 
-backProp :: Monad m => NN -> Double -> Matrix U B I -> Matrix U B J -> m NN 
+backProp :: Monad m => NN -> Double -> Matrix U B I -> Matrix U B H -> m NN 
 backProp nn lc ins tbj = do
    outs <- scanForward ins nn
    let routsbj = map M.cast2 $ reverse outs
@@ -45,7 +43,7 @@ backProp nn lc ins tbj = do
    mapM (applyBackProp1 lc) (zip3 nn fpbjs inss)
 {-# INLINE backProp #-}
 
-mse :: Monad m => Matrix U B J -> m Double
+mse :: Monad m => Matrix U B H -> m Double
 mse errm = do 
    terr <- M.sum $ M.map (\ x -> x ** 2) errm
    return (terr/(1 + (fromIntegral $ M.elems errm)))
@@ -54,14 +52,14 @@ mse errm = do
 {--
  - compute error
  --}
-errorMatrix :: Monad m => Matrix U B J -> Matrix U B J -> m (Matrix U B J)
+errorMatrix :: Monad m => Matrix U B H -> Matrix U B H -> m (Matrix U B H)
 errorMatrix obj tbj = M.d2u $ obj -^ tbj
 {-# INLINE errorMatrix #-}
 
 {--
  - apply backprop to the NN
  --}
-applyBackProp1 :: Monad m => Double -> (Matrix U I J, Matrix U B J, Matrix U B I) -> m (Matrix U I J)
+applyBackProp1 :: Monad m => Double -> (Matrix U I H, Matrix U B H, Matrix U B I) -> m (Matrix U I H)
 applyBackProp1 lc (wij,pbj,obi) = do
    oib <- M.transpose obi
    lij <- oib `M.mmult` pbj
@@ -78,24 +76,24 @@ applyBackProp1 lc (wij,pbj,obi) = do
    M.d2u $ wij +^ uij
 {-# INLINE applyBackProp1 #-}
 
-backPropOutput :: Monad m => Matrix U B J -> Matrix U B J -> m (Matrix U B J)
+backPropOutput :: Monad m => Matrix U B H -> Matrix U B H -> m (Matrix U B H)
 backPropOutput obj ebj = M.d2u $ ebj *^ obj
 {-# INLINE backPropOutput #-}
 
 --calculate the  backprop for the hidden layers
-backPropHidden :: Monad m => Matrix U B J -> (Matrix U B I, Matrix U I J) -> m (Matrix U B I)
+backPropHidden :: Monad m => Matrix U B H -> (Matrix U B I, Matrix U I H) -> m (Matrix U B I)
 backPropHidden ebj (obi,wij) = do
    ebj <- M.transpose =<< wij `M.mmultT` ebj
    let dbi = M.map dsigmoid obi
    M.d2u $ dbi *^ (M.cast2 ebj)
 {-# INLINE backPropHidden #-}
 
-scanForward :: Monad m => Matrix U B I -> NN -> m ([Matrix U B J])
+scanForward :: Monad m => Matrix U B I -> NN -> m ([Matrix U B H])
 scanForward ins nns = (map M.cast2) <$> scanM feed ins nns
    where feed ii nn = M.cast2 <$> feedForward1 ii nn
 {-# INLINE scanForward #-}
 
-feedForward1 :: Monad m => Matrix U B I -> Matrix U I J -> m (Matrix U B J)
+feedForward1 :: Monad m => Matrix U B I -> Matrix U I H -> m (Matrix U B H)
 feedForward1 !ibi wij = do
    sbj <- ibi `M.mmult` wij
    M.d2u $ M.map sigmoid sbj

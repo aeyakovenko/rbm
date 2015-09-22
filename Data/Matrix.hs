@@ -3,10 +3,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE EmptyDataDecls #-}
 module Data.Matrix( Matrix(..)
                   , MatrixOps(..)
                   , R.U
                   , R.D
+                  , B
+                  , I
+                  , H
                   ) where
 
 import qualified Data.Array.Repa as R
@@ -23,6 +27,10 @@ import Data.Array.Repa(Array
                       ,(:.)((:.))
                       ,All(All)
                       )
+
+data H -- ^ num hidden nodes
+data I -- ^ num input nodes
+data B -- ^ batch size
 
 -- | wraps the Repa Array types so we can typecheck the results of
 -- | the matrix operations

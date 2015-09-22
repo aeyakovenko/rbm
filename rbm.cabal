@@ -16,23 +16,22 @@ Library
                      criterion,
                      deepseq
 
-Test-Suite test-repa-RBM
+Test-Suite test-RBM
     type:            exitcode-stdio-1.0
-    main-is:         Data/Repa.hs
+    main-is:         Data/RBM.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.RBM.test
 
-Test-Suite perf-repa-RBM
+Test-Suite perf-RBM
     type:            exitcode-stdio-1.0
     main-is:         Data/RBM.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.RBM.perf
 
-Test-Suite test-repa-DBN
+Test-Suite test-DBN
     type:            exitcode-stdio-1.0
-    main-is:         Data.DBN.hs
+    main-is:         Data/DBN.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.DBN.test
 
 Executable mnist-DBN
-    --type:            exitcode-stdio-1.0
     main-is:         Test/Mnist.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.Mnist.mnist
     Build-Depends:   bytestring,

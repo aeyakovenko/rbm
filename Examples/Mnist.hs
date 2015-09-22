@@ -24,9 +24,23 @@ import Data.Array.Repa(Z(Z)
 import Codec.Compression.GZip as GZ
 import Data.List.Split(chunksOf)
 import System.Random(newStdGen, randomRs)
+import Control.Monad(foldM)
 
-import qualified DBN.Repa as DBN
-import qualified RBM.Repa as RBM
+import qualified Data.DBN as DBN
+import qualified Data.RBM as RBM
+import qualified Data.NN as NN
+import qualified Data.Matrix as M
+import Data.Matrix(Matrix(..)
+                  ,(*^)
+                  ,(+^)
+                  ,(-^)
+                  ,U
+                  ,D
+                  ,B
+                  ,I
+                  ,H
+                  )
+
 
 
 data Image = Image {
@@ -173,8 +187,8 @@ generateSamples = do
       let bb = toMatrix $ rbatches 
       writeArray name bb 
 
-printSamples::Int -> String -> RBM.BxI -> IO ()
-printSamples imagewidth sfile (RBM.BxI bxi) = do
+printSamples::Int -> String -> Matrix U B I -> IO ()
+printSamples imagewidth sfile (Matrix bxi) = do
    let
        computeStrip (Z :. rix :. cix) = 
          let  imagenum = cix `div` imagewidth
@@ -193,7 +207,7 @@ genSample sname db = do
        regenSample ix = do
             let sfile = concat [sname, (show ix), ".bmp"]
             let name = "dist/sample" ++ (show ix)
-                readBatch = RBM.BxI <$> (readArray name)
+                readBatch = Matrix <$> (readArray name)
             g1 <- newStdGen
             bxi <- readBatch
             bxh <- DBN.generate g1 db bxi
@@ -202,10 +216,10 @@ genSample sname db = do
             printSamples imagewidth sfile bxi'
    mapM_ regenSample [0..9::Int] 
 
-sampleProbs :: Monad m => RBM.HxB -> m (R.Array R.U R.DIM1 Double)
-sampleProbs hxb = do 
-   sums <- R.sumP (RBM.unHxB hxb)
-   let nb = R.col $ R.extent $ RBM.unHxB hxb
+sampleProbs :: Monad m => Matrix U H B -> m (R.Array R.U R.DIM1 Double)
+sampleProbs (Matrix hxb) = do 
+   sums <- R.sumP (hxb)
+   let nb = R.col $ R.extent $ hxb
    R.computeUnboxedP $ R.map (prob nb) sums
    where
       prob :: Int -> Double -> Double
@@ -215,9 +229,9 @@ testBatch :: DBN.DBN -> Int -> IO ()
 testBatch db ix = do
    gen <- newStdGen
    let name = "dist/test" ++ (show ix)
-   b <- readArray name
-   bxh <- DBN.generate gen db $ RBM.BxI b
-   hxb <- RBM.HxB <$> (R.transpose2P $ RBM.unBxH bxh)
+   b <- Matrix <$> readArray name
+   bxh <- DBN.generate gen db b
+   hxb <- M.transpose bxh
    pv <- sampleProbs hxb
    print (ix, R.toList pv)
 
@@ -226,39 +240,58 @@ mnist = do
    gen <- newStdGen
    let [r0,r1,r2] = DBN.dbn gen [785,501,501,11]
        name ix = "dist/train" ++ (show ix)
-       readBatch ix = RBM.BxI <$> (readArray (name ix))
+       readBatch ix = Matrix <$> readArray (name ix)
        iobatches = map readBatch [0..468::Int]
-       p1 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.10, RBM.maxBatches = 10000 }
-       p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.10, RBM.maxBatches = 40000 }
+       p1 = RBM.params { RBM.rate = 0.01, RBM.minMSE = 0.10, RBM.maxBatches = 10000 }
+       p2 = RBM.params { RBM.rate = 0.001, RBM.minMSE = 0.01, RBM.maxBatches = 10000 }
        
    (head iobatches) >>= (printSamples 28 "dist/original.bmp")
    genSample "dist/strip.0." [r0]
-   printSamples 28 "dist/weights.0.bmp" (RBM.BxI $ RBM.unHxI $ r0)
+   ds <- M.cast1 <$> M.transpose r0
+   printSamples 28 "dist/weights.0.bmp" ds
 
    dd <- DBN.learnLast iobatches p1 [r0]
    genSample "dist/strip1.p1." dd
-   printSamples 28 "dist/weights.1.p1.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
+   ds <- M.cast1 <$> M.transpose (last dd)
+   printSamples 28 "dist/weights.1.p1.bmp" ds
 
    dd <- DBN.learnLast iobatches p2 dd
    genSample "dist/strip.1.p2." dd
-   printSamples 28 "dist/weights.1.p2.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
+   ds <- M.cast1 <$> M.transpose (last dd)
+   printSamples 28 "dist/weights.1.p2.bmp" ds
 
    dd <- DBN.learnLast iobatches p1 (dd ++ [r1])
    genSample "dist/strip.2.p1" dd
-   printSamples 28 "dist/weights.2.p1.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
+   ds <- M.cast1 <$> M.transpose (last dd)
+   printSamples 28 "dist/weights.2.p1.bmp" ds
+
    dd <- DBN.learnLast iobatches p2 dd
    genSample "dist/strip.2.p2" dd
-   printSamples 28 "dist/weights.2.p2.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
+   ds <- M.cast1 <$> M.transpose (last dd)
+   printSamples 28 "dist/weights.2.p2.bmp" ds
 
    dd <- DBN.learnLast iobatches p1 (dd ++ [r2])
    genSample "dist/strip.3.p1" dd
-   printSamples 28 "dist/weights.3.p1.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
+   ds <- M.cast1 <$> M.transpose (last dd)
+   printSamples 28 "dist/weights.3.p1.bmp" ds
    mapM_ (testBatch dd) [0..9] 
 
    dd <- DBN.learnLast iobatches p2 dd
    genSample "dist/strip.3.p2" dd
-   printSamples 28 "dist/weights.3.p2.bmp" (RBM.BxI $ RBM.unHxI $ last dd)
-   mapM_ (testBatch dd) [0..9] 
+   ds <- M.cast1 <$> M.transpose (last dd)
+   printSamples 28 "dist/weights.3.p2.bmp" ds
+
+   let nn = dd
+       name ix = "dist/bigtrain" ++ (show ix)
+       readBatch ix = M.Matrix <$> (readArray (name ix))
+       testVector :: Int -> [Double]
+       testVector ix = map fromIntegral $ take 10 $ (take (ix - 1) [0..]) ++ [1] ++ [0..]
+       learn nn ix = do
+         batch <- readBatch ix
+         let test = M.fromList (M.row batch, 10) $ concat $ replicate (M.row batch) (testVector ix)
+         NN.backProp nn 0.001 batch test
+   nn <- foldM learn nn [0..9]
+   mapM_ (testBatch nn) [0..9] 
 
 
 

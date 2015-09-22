@@ -9,9 +9,6 @@ module Data.RBM(rbm
                ,Params(..)
                ,params
                ,RBM
-               ,B
-               ,I
-               ,H
                ,perf
                ,test
                ,run_prop_learned
@@ -36,7 +33,6 @@ import System.Random(RandomGen
 
 import Control.Monad.Identity(runIdentity)
 import Control.Monad(foldM)
-import Control.DeepSeq(NFData)
 import Debug.Trace(trace)
 import qualified Data.Matrix as M
 import Data.Matrix(Matrix(..)
@@ -44,17 +40,16 @@ import Data.Matrix(Matrix(..)
                   ,(+^)
                   ,(-^)
                   ,U
-                  ,D
+                  ,I
+                  ,H
+                  ,B
                   )
 
-data H -- ^ num hidden nodes
-data I -- ^ num input nodes
-data B -- ^ batch size
 
 {-|
  - weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
  --}
-type RBM = Matrix U H I
+type RBM = Matrix U I H
 
 type MSE = Double
 
@@ -71,7 +66,7 @@ params = Params 0.01 0.001 10 10000 5 0
 
 -- |create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
-rbm r ni nh = M.randomish (nh, ni) (-0.01, 0.01) (fst $ random r)
+rbm r ni nh = M.randomish (ni, nh) (-0.01, 0.01) (fst $ random r)
 
 infinity :: Double
 infinity = read "Infinity"
@@ -109,9 +104,10 @@ learn prm rb batches = do
  --}
 energy :: (Monad m) => RBM -> (Matrix U B I) -> m Double
 energy rb bxi = do
-   hxb <- hiddenProbs rb bxi
-   hxi <- hxb `M.mmult` bxi
-   enr <- (M.sum $ rb *^ hxi)
+   bxh <- hiddenProbs rb bxi
+   ixb <- M.transpose bxi
+   ixh <- ixb `M.mmult` bxh
+   enr <- (M.sum $ rb *^ ixh)
    return $ negate enr
 
 {-|
@@ -121,10 +117,10 @@ energy rb bxi = do
  - map sigmoid $ biased `mmult` weights
  -
  --}
-hiddenProbs :: (Monad m) => RBM -> (Matrix U B I) -> m (Matrix U H B)
-hiddenProbs wws iis = do
-   !hxb <- wws `M.mmultT` iis
-   M.d2u $ M.map sigmoid hxb
+hiddenProbs :: (Monad m) => RBM -> (Matrix U B I) -> m (Matrix U B H)
+hiddenProbs ixh bxi = do
+   !bxh <- bxi `M.mmult` ixh 
+   M.d2u $ M.map sigmoid bxh
 {-# INLINE hiddenProbs #-}
 
 {-|
@@ -137,22 +133,21 @@ hiddenProbs wws iis = do
  -
  --}
 inputProbs :: (Monad m) => (Matrix U I H) -> (Matrix U B H) -> m (Matrix U I B)
-inputProbs wws hhs = do
-   !ixb <- wws `M.mmultT` hhs
+inputProbs ixh bxh = do
+   !ixb <- ixh `M.mmultT` bxh
    M.d2u $ M.map sigmoid ixb
 {-# INLINE inputProbs #-}
 
  -- |given a batch of unbiased inputs, update the rbm weights from the batch at once
 batch :: (Monad m) => Params -> RBM -> [m (Matrix U B I)] -> m RBM
-batch par hxi ins = foldM (weightUpdate par) hxi ins
+batch par ixh ins = foldM (weightUpdate par) ixh ins
 {-# INLINE batch #-}
 
 -- |given an unbiased input batch, generate the the RBM weight updates
-weightUpdate:: (Monad m) => Params-> Matrix U H I -> m (Matrix U B I) -> m (Matrix U H I)
-weightUpdate par hxi mbxi = do
+weightUpdate:: (Monad m) => Params-> Matrix U I H -> m (Matrix U B I) -> m (Matrix U I H)
+weightUpdate par ixh mbxi = do
    bxi <- mbxi
-   let cols = M.col bxi
-       rows = M.row bxi
+   let rows = M.row bxi
        rand = mkStdGen (seed par)
        loop rbm' (rr,rix) = do
             let sz | ((miniBatch par) + rix) > rows = rows - rix
@@ -161,35 +156,31 @@ weightUpdate par hxi mbxi = do
             bxi' <- M.d2u vxi
             !wd <- weightDiff rr rbm' bxi'
             !diffsum <- M.sum $ M.map abs wd
-            !weightsum <- M.sum $ M.map abs hxi
+            !weightsum <- M.sum $ M.map abs ixh
             let lrate'
                   | diffsum == 0 = rate par
                   | otherwise = (rate par) * weightsum / diffsum
             let wd' = M.map ((*) lrate') wd
             M.d2u $ rbm' +^ wd'
-   foldM loop hxi $ zip (splits rand) [0..((rows) `div` (miniBatch par))]
+   foldM loop ixh $ zip (splits rand) [0..((rows) `div` (miniBatch par))]
 {-# INLINE weightUpdate #-}
 
-weightDiff :: (Monad m, RandomGen r) => r -> Matrix U H I -> Matrix U B I -> m (Matrix U H I)
-weightDiff rand hxi bxi = do
+weightDiff :: (Monad m, RandomGen r) => r -> Matrix U I H -> Matrix U B I -> m (Matrix U I H)
+weightDiff rand ixh bxi = do
    let (r1,r2) = split rand
-   hxb <- generate r1 hxi bxi
-   bxh <- M.transpose hxb
-   ixb <- M.transpose bxi
-   ixh <- M.transpose hxi
+   bxh <- generate r1 ixh bxi
    ixb' <- regenerate r2 ixh bxh
-   w1 <- (hxb) `M.mmultT` (ixb)
-   w2 <- (hxb) `M.mmultT` (ixb')
+   ixb <- M.transpose bxi
+   w1 <- ixb `M.mmult` bxh
+   w2 <- ixb' `M.mmult` bxh
    M.d2u $ w1 -^ w2
 {-# INLINE weightDiff #-}
 
-reconErr :: (Monad m, RandomGen r) => r -> Matrix U H I -> [m (Matrix U B I)] -> m Double
-reconErr rand hxi mbxis = do
+reconErr :: (Monad m, RandomGen r) => r -> Matrix U I H -> [m (Matrix U B I)] -> m Double
+reconErr rand ixh mbxis = do
    let loop !total mbxi = do
          bxi <- mbxi
-         hxb <- generate rand hxi bxi
-         bxh <- M.transpose hxb
-         ixh <- M.transpose hxi
+         bxh <- generate rand ixh bxi
          ixb <- regenerate rand ixh bxh
          bxi' <- M.transpose ixb
          wd <- M.d2u $ bxi' -^ bxi
@@ -206,19 +197,19 @@ splits rp = rc : splits rn
       (rc,rn) = split rp
 
 -- given a biased input batch [(1:input)], generate a biased hidden layer sample batch
-generate :: (Monad m, RandomGen r) => r -> Matrix U H I -> Matrix U B I -> m (Matrix U H B)
-generate rand rb biased = do
-   hhs <- hiddenProbs rb biased
-   rands <- randomHxB (fst $ random rand) ((M.row hhs),(M.col hhs))
-   M.d2u $ M.zipWith checkP hhs rands
+generate :: (Monad m, RandomGen r) => r -> Matrix U I H -> Matrix U B I -> m (Matrix U B H)
+generate rand ixh biased = do
+   bxh <- hiddenProbs ixh biased
+   rands <- randomBxH (fst $ random rand) (M.shape bxh)
+   M.d2u $ M.zipWith checkP bxh rands
 {-# INLINE generate #-}
 
 -- given a batch of biased hidden layer samples, generate a batch of biased input layer samples
 regenerate :: (Monad m, RandomGen r) => r -> Matrix U I H -> Matrix U B H -> m (Matrix U I B)
-regenerate rand rb hidden = do
-   iis <- inputProbs rb hidden
-   rands <- randomIxB (fst $ random rand) (M.shape iis)
-   M.d2u $ M.zipWith checkP iis rands
+regenerate rand ixh bxh = do
+   ixb <- inputProbs ixh bxh
+   rands <- randomIxB (fst $ random rand) (M.shape ixb)
+   M.d2u $ M.zipWith checkP ixb rands
 {-# INLINE regenerate #-}
 
 randomIxB :: (Monad m) => Int -> (Int,Int) -> m (Matrix U I B)
@@ -229,13 +220,13 @@ randomIxB rseed sh = M.d2u $ M.traverse set rands
       set vv _ _ = vv
 {-# INLINE randomIxB #-}
 
-randomHxB :: (Monad m) => Int -> (Int,Int) -> m (Matrix U H B)
-randomHxB rseed sh = M.d2u $ M.traverse set rands 
+randomBxH :: (Monad m) => Int -> (Int,Int) -> m (Matrix U B H)
+randomBxH rseed sh = M.d2u $ M.traverse set rands 
    where
       rands = M.randomish sh (0,1) rseed
-      set _ 0 _ = 0
+      set _ _ 0 = 0
       set vv _ _ = vv
-{-# INLINE randomHxB #-}
+{-# INLINE randomBxH #-}
 
 --sample is 0 if generated number gg is greater then probabiliy pp
 --so the higher pp the more likely that it will generate a 1
@@ -308,27 +299,27 @@ prop_hiddenProbs gen ni nh = runIdentity $ do
        fi ww = 1 + (fromIntegral ww)
        input = M.randomish (1, (fi ni)) (0,1) gen
    pp <- hiddenProbs rb input
-   return $ (fi nh) == (M.row pp)
+   return $ (fi nh) == (M.col pp)
 
 prop_hiddenProbs2 :: Bool
 prop_hiddenProbs2 = runIdentity $ do
-   let h0 = w00 * i0 + w01 * i1 + w02 * i2
-       h1 = w10 * i0 + w11 * i1 + w12 * i2
-       i0:i1:i2:_ = [1..]
+   let h0 = w00 * i0 + w10 * i1
+       h1 = w01 * i0 + w11 * i1
+       h2 = w02 * i0 + w12 * i1
+       i0:i1:_ = [1..]
        w00:w01:w02:w10:w11:w12:_ = [1..]
        wws = [w00,w01,w02,w10,w11,w12]
-       input = M.fromList (1,3) $ [i0,i1,i2]
+       input = M.fromList (1,2) $ [i0,i1]
        rb = M.fromList (2,3) wws
    pp <- M.toList <$> hiddenProbs rb input
-   return $ pp == map sigmoid [h0, h1]
+   return $ pp == map sigmoid [h0, h1, h2]
 
 prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
 prop_inputProbs gen ni nh = runIdentity $ do
    let hidden = M.randomish (1,(fi nh)) (0,1) gen
        rb = rbm (mkStdGen gen) (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-   rb' <- M.transpose rb
-   pp <- inputProbs rb' hidden
+   pp <- inputProbs rb hidden
    return $ (fi ni) == (M.row pp)
 
 prop_inputProbs2 :: Bool
