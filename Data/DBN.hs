@@ -144,7 +144,7 @@ prop_not_learned ni nh = (uncurry check) $ run_prop_learned (-1.0) (fi ni) 2 (fi
 test :: IO ()
 test = do
    let check rr = if (isSuccess rr) then return () else exitFailure
-       cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
+       cfg = stdArgs { maxSuccess = 10, maxSize = 10 }
        runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
    runtest "notlearnred"  prop_not_learned
    runtest "learned"      prop_learned

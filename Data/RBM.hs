@@ -1,17 +1,14 @@
 {-# LANGUAGE BangPatterns #-}
 module Data.RBM(rbm
-               ,learn
+               ,RBM
+               ,contrastiveDivergence
                ,energy
-               ,generate
-               ,regenerate
                ,hiddenProbs
                ,inputProbs
-               ,Params(..)
-               ,params
-               ,RBM
+               ,sampleBxA
+               ,sampleAxB
                ,perf
                ,test
-               ,run_prop_learned
                ) where
 
 --benchmark modules
@@ -24,12 +21,7 @@ import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
 --impl modules
 --
-import System.Random(RandomGen
-                    ,random
-                    ,randomRs
-                    ,mkStdGen
-                    ,split
-                    )
+import qualified System.Random as Rand
 
 import Control.Monad.Identity(runIdentity)
 import Control.Monad(foldM)
@@ -45,63 +37,15 @@ import Data.Matrix(Matrix(..)
                   ,B
                   )
 
-
-{-|
- - weight matrix with 1 bias nodes in each layer, numHidden + 1 x numInputs  + 1
- --}
+-- | weight matrix, numInputs x numHidden
+-- | where the bias node is the first node
 type RBM = Matrix U I H
-
-type MSE = Double
-
-data Params = Params { rate :: Double      -- rate of learning each input
-                     , minMSE :: MSE       -- min MSE before done
-                     , minBatches :: Int   -- min number of times to repeat
-                     , maxBatches :: Int   -- max number of times to repeat
-                     , miniBatch :: Int
-                     , seed :: Int         -- random seed
-                     }
-
-params :: Params
-params = Params 0.01 0.001 10 10000 5 0
 
 -- |create an rbm with some randomized weights
 rbm :: RandomGen r => r -> Int -> Int -> RBM
 rbm r ni nh = M.randomish (ni, nh) (-0.01, 0.01) (fst $ random r)
 
-infinity :: Double
-infinity = read "Infinity"
-
--- |update the rbm weights from each batch
-learn :: (Monad m) => Params -> RBM -> [m (Matrix U B I)]-> m RBM
-learn prm rb batches = do
-   let 
-       ins = cycle batches
-       loop bnum crb _ _
-         | bnum > (maxBatches prm) = "maxbatches" `trace` return crb
-       loop bnum crb mse _
-         | bnum >= (minBatches prm) && mse < (minMSE prm) = "minmse" `trace` return crb
-       loop bnum crb _ r0
-         | ((fst $ random r0) `mod` (10::Int) == 0) = do
-            let (r1,r2) = split r0
-                rbxi = head $ drop (head $ randomRs (0::Int, (length batches)) r1) ins
-            bxi <- rbxi
-            mse <- reconErr r1 crb [return bxi]
-            (show (mse, bnum)) `trace` loop bnum crb mse r2
-       loop bnum crb mse r0 = do
-            let (r1,r2) = split r0
-                rbxi = head $ drop (head $ randomRs (0::Int, (length batches)) r1) ins
-                par = prm { seed = (fst $ random r1) }
-            bxi <- rbxi
-            let nbnum = bnum + (M.row bxi)
-            nrb <- batch par crb [return bxi]
-            loop nbnum nrb mse r2
-       rr = (mkStdGen $ seed prm)
-   loop 0 rb infinity rr
-{-# INLINE learn #-}
-
-{-|
- - given an rbm and a biased input array, generate the energy
- --}
+-- | given an rbm and a biased input array, generate the energy
 energy :: (Monad m) => RBM -> (Matrix U B I) -> m Double
 energy rb bxi = do
    bxh <- hiddenProbs rb bxi
@@ -109,6 +53,34 @@ energy rb bxi = do
    ixh <- ixb `M.mmult` bxh
    enr <- (M.sum $ rb *^ ixh)
    return $ negate enr
+
+-- |given an unbiased input batch, generate the the RBM weight updates
+contrastiveDivergence:: (Monad m) => Int -> Matrix U I H -> Matrix U B I -> m (Matrix U I H, Double)
+contrastiveDivergence seed ixh bxi = do
+   let rand = mkStdGen seed
+   !wd <- weightDiff rand ixh bxi
+   !uave <- M.sum $ M.map abs wd
+   !wave <- M.sum $ M.map abs ixh
+   let lc = rate par
+       lc' = if wave > uave || uave == 0 
+               then lc 
+               else (wave / uave) * lc 
+   let wd' = M.map ((*) lc') wd
+   urbm <- M.d2u $ rbm' +^ wd'
+   err <- M.mse wd'
+   return (urbm, err)
+{-# INLINE weightUpdate #-}
+
+weightDiff :: Monad m => Int -> Matrix U I H -> Matrix U B I -> m (Matrix U I H)
+weightDiff seed ixh bxi = do
+   let (r1:r2:_) = randoms seed
+   bxh <- sampleBxA r1 <-< hiddenProbs ixh bxi
+   ixb' <- sampleAxB r1 <-< inputProbs ixh bxh
+   ixb <- M.transpose bxi
+   w1 <- ixb `M.mmult` bxh
+   w2 <- ixb' `M.mmult` bxh
+   M.d2u $ w1 -^ w2
+{-# INLINE weightDiff #-}
 
 {-|
  - given a biased input generate probabilities of the hidden layer
@@ -123,6 +95,7 @@ hiddenProbs ixh bxi = do
    M.d2u $ M.map sigmoid bxh
 {-# INLINE hiddenProbs #-}
 
+
 {-|
  - given a batch biased hidden sample generate probabilities of the input layer
  - incuding the biased probability
@@ -135,96 +108,42 @@ hiddenProbs ixh bxi = do
 inputProbs :: (Monad m) => (Matrix U I H) -> (Matrix U B H) -> m (Matrix U I B)
 inputProbs ixh bxh = do
    !ixb <- ixh `M.mmultT` bxh
-   M.d2u $ M.map sigmoid ixb
+   d2u $ M.map sigmoid ixb
 {-# INLINE inputProbs #-}
-
- -- |given a batch of unbiased inputs, update the rbm weights from the batch at once
-batch :: (Monad m) => Params -> RBM -> [m (Matrix U B I)] -> m RBM
-batch par ixh ins = foldM (weightUpdate par) ixh ins
-{-# INLINE batch #-}
-
--- |given an unbiased input batch, generate the the RBM weight updates
-weightUpdate:: (Monad m) => Params-> Matrix U I H -> m (Matrix U B I) -> m (Matrix U I H)
-weightUpdate par ixh mbigbatch = do
-   !bigbatch <- mbigbatch
-   let rand = mkStdGen (seed par)
-       loop rbm' (rr,bxi) = do
-            !bxi' <- M.d2u bxi
-            !wd <- weightDiff rr rbm' bxi'
-            !uave <- M.sum $ M.map abs wd
-            !wave <- M.sum $ M.map abs ixh
-            let lc = rate par
-                lc' = if wave > uave || uave == 0 
-                        then lc 
-                        else (wave / uave) * lc 
-            let wd' = M.map ((*) lc') wd
-            M.d2u $ rbm' +^ wd'
-   foldM loop ixh $ zip (splits rand) (M.splitRows (miniBatch par) bigbatch)
-{-# INLINE weightUpdate #-}
-
-weightDiff :: (Monad m, RandomGen r) => r -> Matrix U I H -> Matrix U B I -> m (Matrix U I H)
-weightDiff rand ixh bxi = do
-   let (r1,r2) = split rand
-   bxh <- generate r1 ixh bxi
-   ixb' <- regenerate r2 ixh bxh
-   ixb <- M.transpose bxi
-   w1 <- ixb `M.mmult` bxh
-   w2 <- ixb' `M.mmult` bxh
-   M.d2u $ w1 -^ w2
-{-# INLINE weightDiff #-}
-
-reconErr :: (Monad m, RandomGen r) => r -> Matrix U I H -> [m (Matrix U B I)] -> m Double
-reconErr rand ixh mbxis = do
-   let loop !total mbxi = do
-         bxi <- mbxi
-         bxh <- generate rand ixh bxi
-         ixb <- regenerate rand ixh bxh
-         bxi' <- M.transpose ixb
-         wd <- M.d2u $ bxi' -^ bxi
-         !mse <- M.sum $ M.map (\ xx -> xx ** 2) wd
-         let sz = 1 + (M.elems wd)
-         return (total +  (mse / (fromIntegral sz)))
-   !mse <- foldM loop 0 mbxis
-   return $ (mse / (fromIntegral $ length mbxis))
-{-# INLINE reconErr #-}
 
 splits :: RandomGen r => r -> [r]
 splits rp = rc : splits rn
    where
       (rc,rn) = split rp
 
--- given a biased input batch [(1:input)], generate a biased hidden layer sample batch
-generate :: (Monad m, RandomGen r) => r -> Matrix U I H -> Matrix U B I -> m (Matrix U B H)
-generate rand ixh biased = do
-   bxh <- hiddenProbs ixh biased
-   rands <- randomBxH (fst $ random rand) (M.shape bxh)
-   M.d2u $ M.zipWith checkP bxh rands
-{-# INLINE generate #-}
-
--- given a batch of biased hidden layer samples, generate a batch of biased input layer samples
-regenerate :: (Monad m, RandomGen r) => r -> Matrix U I H -> Matrix U B H -> m (Matrix U I B)
-regenerate rand ixh bxh = do
-   ixb <- inputProbs ixh bxh
-   rands <- randomIxB (fst $ random rand) (M.shape ixb)
+sampleAxB :: (Monad m) => Int -> Matrix U a B -> m (Matrix U a B) 
+sampleAxB seed axb = do
+   rands <- randomAxB seed (M.shape axb)
    M.d2u $ M.zipWith checkP ixb rands
-{-# INLINE regenerate #-}
 
-randomIxB :: (Monad m) => Int -> (Int,Int) -> m (Matrix U I B)
-randomIxB rseed sh = M.d2u $ M.traverse set rands
+sampleBxA :: (Monad m) => Int -> Matrix U B a -> m (Matrix U B a) 
+sampleBxA seed bxa = do
+   rands <- randomBxA seed (M.shape bxa)
+   M.d2u $ M.zipWith checkP ixb rands
+
+randomAxB :: (Monad m) => Int -> (Int,Int) -> m (Matrix U I B)
+randomAxB rseed sh = M.d2u $ M.traverse set rands
    where
       rands = M.randomish sh (0,1) rseed
       set _ 0 _ = 0
       set vv _ _ = vv
 {-# INLINE randomIxB #-}
 
-randomBxH :: (Monad m) => Int -> (Int,Int) -> m (Matrix U B H)
-randomBxH rseed sh = M.d2u $ M.traverse set rands 
+randomBxA :: (Monad m) => Int -> (Int,Int) -> m (Matrix U B a)
+randomBxA rseed sh = M.d2u $ M.traverse set rands
    where
       rands = M.randomish sh (0,1) rseed
       set _ _ 0 = 0
       set vv _ _ = vv
 {-# INLINE randomBxH #-}
 
+randoms :: Int -> [Int] 
+randoms seed = R.randoms (R.mkStdGen seed)
 --sample is 0 if generated number gg is greater then probabiliy pp
 --so the higher pp the more likely that it will generate a 1
 checkP ::  Double -> Double -> Double

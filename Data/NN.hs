@@ -23,44 +23,32 @@ feedForward nn ins = M.cast2 <$> foldM feed ins nn
    where feed a b = M.cast2 <$> feedForward1 a b
 {-# INLINE feedForward #-}
 
-backProp :: Monad m => NN -> Double -> Matrix U B I -> Matrix U B H -> m NN 
-backProp nn lc ins tbj = do
+backPropagate :: Monad m => NN -> Double -> Matrix U B I -> Matrix U B H -> m (NN, Double)
+backPropagate nn lc ins tbj = do
    outs <- scanForward ins nn
-   let routsbj = map M.cast2 $ reverse outs
+   let routs = map M.cast2 $ reverse outs
    let rnn = reverse nn
+   let result = head routs
 
    --output layer backprop
-   ebj <- errorMatrix (head routsbj) tbj
-   pbj <- backPropOutput (head routsbj) ebj
+   errm <- M.d2u result -^ tbj
+   pbj <- backPropOutput result errm
 
    --hiddel layer backprop results
    let back pb ons = M.cast2 <$> backPropHidden pb ons
-   pbjs <- scanM back pbj (zip (tail routsbj) rnn)
+   pbjs <- scanM back pbj (zip (tail routs) rnn)
 
    --apply the backprops
    let fpbjs = reverse pbjs
    let inss = ins : (map M.cast2 outs)
-   mapM (applyBackProp1 lc) (zip3 nn fpbjs inss)
+   unn <- mapM (applyBackPropH lc) (zip3 nn fpbjs inss)
+   err <- M.mse errm
+   return (unn, 
 {-# INLINE backProp #-}
 
-mse :: Monad m => Matrix U B H -> m Double
-mse errm = do 
-   terr <- M.sum $ M.map (\ x -> x ** 2) errm
-   return (terr/(1 + (fromIntegral $ M.elems errm)))
-{-# INLINE mse #-}
-
-{--
- - compute error
- --}
-errorMatrix :: Monad m => Matrix U B H -> Matrix U B H -> m (Matrix U B H)
-errorMatrix obj tbj = M.d2u $ obj -^ tbj
-{-# INLINE errorMatrix #-}
-
-{--
- - apply backprop to the NN
- --}
-applyBackProp1 :: Monad m => Double -> (Matrix U I H, Matrix U B H, Matrix U B I) -> m (Matrix U I H)
-applyBackProp1 lc (wij,pbj,obi) = do
+-- |apply backprop to the hidden nodes
+applyBackPropH :: Monad m => Double -> (Matrix U I H, Matrix U B H, Matrix U B I) -> m (Matrix U I H)
+applyBackPropH lc (wij,pbj,obi) = do
    oib <- M.transpose obi
    lij <- oib `M.mmult` pbj
    let sz :: Double = 1.0 / (fromIntegral $ M.elems wij)
@@ -74,7 +62,7 @@ applyBackProp1 lc (wij,pbj,obi) = do
                else (wave / uave) * lc 
    let uij = M.map ((*) (negate lc')) lij
    M.d2u $ wij +^ uij
-{-# INLINE applyBackProp1 #-}
+{-# INLINE applyBackPropH #-}
 
 backPropOutput :: Monad m => Matrix U B H -> Matrix U B H -> m (Matrix U B H)
 backPropOutput obj ebj = M.d2u $ ebj *^ obj
@@ -96,15 +84,14 @@ scanForward ins nns = (map M.cast2) <$> scanM feed ins nns
 feedForward1 :: Monad m => Matrix U B I -> Matrix U I H -> m (Matrix U B H)
 feedForward1 !ibi wij = do
    sbj <- ibi `M.mmult` wij
-   M.d2u $ M.map sigmoid sbj
+   let update (v r c) | c == 0 = 1 -- ^ set bias output to 1
+                      | sigmoid v
+   M.d2u $ M.traverse update sbj
 {-# INLINE feedForward1 #-}
 
 scanM :: (Monad m) =>  (a -> b -> m a) -> a -> [b] -> m [a]
-scanM _ a [] =  return [a]
-scanM f a ls = do 
-   item <- f a (head ls)
-   rest <- scanM f item (tail ls)
-   return (a:rest)
+scanM f a ls = reverse <$> foldM (scanf f) a ls
+   where scanf f a b = f (head a) b >>= (\ r -> return (r:a))
 {-# INLINE scanM #-}
 
 

@@ -84,14 +84,22 @@ class MatrixOps a b where
 
    transpose :: Monad m => Matrix U a b -> m (Matrix U b a)
    transpose (Matrix ar) = Matrix <$> (R.transpose2P ar)
+   {-# INLINE transpose #-}
 
    sum :: Monad m =>  Matrix c a b -> m Double
    sum (Matrix ar) = R.sumAllP ar
+   {-# INLINE sum #-}
+
+   mse :: Monad m => Matrix c a b -> m Double
+   mse errm = do
+      terr <- Data.Matrix.sum $ Data.Matrix.map (\ x -> x ** 2) errm
+      return (terr/(1 + (fromIntegral $ elems errm)))
+   {-# INLINE mse #-}
 
    elems :: Matrix c a b -> Int
    elems m = (row m) * (col m)
-
    {-# INLINE elems #-}
+
    row :: Matrix c a b -> Int
    row (Matrix ar) = (R.row (R.extent ar))
    {-# INLINE row #-}
@@ -108,12 +116,6 @@ class MatrixOps a b where
    randomish (r,c) (minv,maxv) seed = Matrix $ R.randomishDoubleArray (Z :. r :. c) minv maxv seed
    {-# INLINE randomish #-}
 
-   extractRows :: Matrix c a b -> (Int,Int) -> Matrix D a b 
-   extractRows mm@(Matrix ar) (rix,num) = Matrix $ R.extract
-                                          (Z :. rix :. 0)
-                                          (Z :. num :. (col mm))
-                                          ar
-   {-# INLINE extractRows #-}
    splitRows :: Int -> Matrix c a b -> [Matrix D a b]
    splitRows nr mm = P.map (extractRows mm) chunks
       where chunks = P.map maxn $ zip rixs (repeat nr)
@@ -121,7 +123,13 @@ class MatrixOps a b where
                | rix + num > (row mm) = (rix, (row mm) - rix)
                | otherwise = (rix, num)
             rixs = [0,nr..(row mm)-1]
-
+            extractRows :: Matrix c a b -> (Int,Int) -> Matrix D a b 
+            extractRows mm@(Matrix ar) (rix,num) = Matrix $ R.extract
+                                                   (Z :. rix :. 0)
+                                                   (Z :. num :. (col mm))
+                                                   ar
+   {-# INLINE splitRows #-}
+         
 
    zipWith :: (Double -> Double -> Double) -> Matrix c a b -> Matrix c a b -> (Matrix D a b)
    zipWith f (Matrix aa) (Matrix bb) = Matrix (R.zipWith f aa bb)
