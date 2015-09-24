@@ -5,8 +5,7 @@ module Data.RBM(rbm
                ,energy
                ,hiddenProbs
                ,inputProbs
-               ,sampleBxA
-               ,sampleAxB
+               ,sample
                ,perf
                ,test
                ) where
@@ -21,7 +20,7 @@ import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
 --impl modules
 --
-import qualified System.Random as Rand
+import qualified System.Random as R
 
 import Control.Monad.Identity(runIdentity)
 import Control.Monad(foldM)
@@ -57,8 +56,7 @@ energy rb bxi = do
 -- |given an unbiased input batch, generate the the RBM weight updates
 contrastiveDivergence:: (Monad m) => Int -> Matrix U I H -> Matrix U B I -> m (Matrix U I H, Double)
 contrastiveDivergence seed ixh bxi = do
-   let rand = mkStdGen seed
-   !wd <- weightDiff rand ixh bxi
+   !wd <- weightDiff seed ixh bxi
    !uave <- M.sum $ M.map abs wd
    !wave <- M.sum $ M.map abs ixh
    let lc = rate par
@@ -74,8 +72,8 @@ contrastiveDivergence seed ixh bxi = do
 weightDiff :: Monad m => Int -> Matrix U I H -> Matrix U B I -> m (Matrix U I H)
 weightDiff seed ixh bxi = do
    let (r1:r2:_) = randoms seed
-   bxh <- sampleBxA r1 <-< hiddenProbs ixh bxi
-   ixb' <- sampleAxB r1 <-< inputProbs ixh bxh
+   bxh <- sample r1 <=< hiddenProbs ixh bxi
+   ixb' <- sample r1 <=< inputProbs ixh bxh
    ixb <- M.transpose bxi
    w1 <- ixb `M.mmult` bxh
    w2 <- ixb' `M.mmult` bxh
@@ -92,7 +90,9 @@ weightDiff seed ixh bxi = do
 hiddenProbs :: (Monad m) => RBM -> (Matrix U B I) -> m (Matrix U B H)
 hiddenProbs ixh bxi = do
    !bxh <- bxi `M.mmult` ixh 
-   M.d2u $ M.map sigmoid bxh
+   let update v r _ | r == 0 = 1 -- ^ set bias output to 1
+                    | otherwise = sigmoid v
+   M.d2u $ M.traverse sigmoid bxh
 {-# INLINE hiddenProbs #-}
 
 
@@ -108,42 +108,21 @@ hiddenProbs ixh bxi = do
 inputProbs :: (Monad m) => (Matrix U I H) -> (Matrix U B H) -> m (Matrix U I B)
 inputProbs ixh bxh = do
    !ixb <- ixh `M.mmultT` bxh
-   d2u $ M.map sigmoid ixb
+   let update v _ c | c == 0 = 1 -- ^ set bias output to 1
+                    | otherwise = sigmoid v
+   d2u $ M.traverse sigmoid ixb
 {-# INLINE inputProbs #-}
 
-splits :: RandomGen r => r -> [r]
-splits rp = rc : splits rn
-   where
-      (rc,rn) = split rp
-
-sampleAxB :: (Monad m) => Int -> Matrix U a B -> m (Matrix U a B) 
-sampleAxB seed axb = do
-   rands <- randomAxB seed (M.shape axb)
+sample :: (Monad m) => Int -> Matrix U a b -> m (Matrix U a b) 
+sample seed axb = do
+   let rands = M.randomish (M.shape axb) (0,1) seed 
    M.d2u $ M.zipWith checkP ixb rands
-
-sampleBxA :: (Monad m) => Int -> Matrix U B a -> m (Matrix U B a) 
-sampleBxA seed bxa = do
-   rands <- randomBxA seed (M.shape bxa)
-   M.d2u $ M.zipWith checkP ixb rands
-
-randomAxB :: (Monad m) => Int -> (Int,Int) -> m (Matrix U I B)
-randomAxB rseed sh = M.d2u $ M.traverse set rands
-   where
-      rands = M.randomish sh (0,1) rseed
-      set _ 0 _ = 0
-      set vv _ _ = vv
-{-# INLINE randomIxB #-}
-
-randomBxA :: (Monad m) => Int -> (Int,Int) -> m (Matrix U B a)
-randomBxA rseed sh = M.d2u $ M.traverse set rands
-   where
-      rands = M.randomish sh (0,1) rseed
-      set _ _ 0 = 0
-      set vv _ _ = vv
-{-# INLINE randomBxH #-}
+{-# INLINE sample #-}
 
 randoms :: Int -> [Int] 
 randoms seed = R.randoms (R.mkStdGen seed)
+{-# INLINE randoms #-}
+
 --sample is 0 if generated number gg is greater then probabiliy pp
 --so the higher pp the more likely that it will generate a 1
 checkP ::  Double -> Double -> Double
@@ -160,17 +139,17 @@ sigmoid d = 1 / (1 + (exp (negate d)))
 -- test to see if we can learn a random string
 run_prop_learned :: Double -> Int -> Int -> Double
 run_prop_learned lrate ni nh = runIdentity $ do
-   let rb = rbm (mr 0) (fi ni) (fi nh)
+   let rb = rbm r1 (fi ni) (fi nh)
        inputbatchL = concat $ replicate batchsz inputlst
        inputbatch = M.fromList (batchsz,fi ni) $ inputbatchL
-       geninputs = randomRs (0::Int,1::Int) (mr 4)
+       geninputs = randomRs (0::Int,1::Int) r2
        inputlst = map fromIntegral $ take (fi ni) $ 1:geninputs
        fi ww = 1 + ww
-       mr i = mkStdGen (fi ni + fi nh + i)
+       (r1:r2,r3:_) = randoms (ni + nh)
        batchsz = 2000
        par = params { rate = 0.1 * lrate, miniBatch = 5, maxBatches = 2000  }
    lrb <- learn par rb [return inputbatch]
-   reconErr (mr 2) lrb [return inputbatch]
+   reconErr r3 lrb [return inputbatch]
 
 prop_learned :: Word8 -> Word8 -> Bool
 prop_learned ni nh = 0.1 > (run_prop_learned 1.0 (fi ni) (fi nh))
@@ -185,8 +164,8 @@ prop_not_learned ni nh = 0.1 < (run_prop_learned (-1.0) (fi ni) (fi nh))
 prop_learn :: Word8 -> Word8 -> Bool
 prop_learn ni nh = runIdentity $ do
    let inputs = M.fromList (fi nh, fi ni) $ take ((fi ni) * (fi nh)) $ cycle [0,1]
-       rand = mkStdGen $ fi nh
-       rb = rbm rand (fi ni) (fi nh)
+       seed = ni + nh
+       rb = rbm seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
        par = params { rate = 1.0 , miniBatch = 5, maxBatches = 2000 }
    lrb <- learn par rb [return $ inputs]
@@ -194,26 +173,27 @@ prop_learn ni nh = runIdentity $ do
 
 prop_batch :: Word8 -> Word8 -> Word8 -> Bool
 prop_batch ix ni nh = runIdentity $ do
-   let rb = rbm rand (fi ni) (fi nh)
-       rand = mkStdGen $ fi ix
+   let rb = rbm seed (fi ni) (fi nh)
+       seed = ix + ni + nh
        inputs = M.fromList (fi ix,fi ni) $ take ((fi ni) * (fi ix)) $ cycle [0,1]
        fi ww = 1 + (fromIntegral ww)
        par = params { rate = 1.0 , miniBatch = 5, maxBatches = 2000  }
    lrb <- batch par rb [return inputs]
    return $ (M.elems rb) == (M.elems lrb)
 
-prop_init :: Int -> Word8 -> Word8 -> Bool
-prop_init gen ni nh = (fi ni) * (fi nh)  == (M.elems rb)
+prop_init :: Word8 -> Word8 -> Bool
+prop_init ni nh = (fi ni) * (fi nh)  == (M.elems rb)
    where
-      rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+      seed = ni + nh
+      rb = rbm seed (fi ni) (fi nh)
       fi :: Word8 -> Int
       fi ww = 1 + (fromIntegral ww)
 
 prop_hiddenProbs :: Int -> Word8 -> Word8 -> Bool
-prop_hiddenProbs gen ni nh = runIdentity $ do
-   let rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+prop_hiddenProbs seed ni nh = runIdentity $ do
+   let rb = rbm seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
-       input = M.randomish (1, (fi ni)) (0,1) gen
+       input = M.randomish (1, (fi ni)) (0,1) seed
    pp <- hiddenProbs rb input
    return $ (fi nh) == (M.col pp)
 
@@ -231,9 +211,9 @@ prop_hiddenProbs2 = runIdentity $ do
    return $ pp == map sigmoid [h0, h1, h2]
 
 prop_inputProbs :: Int -> Word8 -> Word8 -> Bool
-prop_inputProbs gen ni nh = runIdentity $ do
-   let hidden = M.randomish (1,(fi nh)) (0,1) gen
-       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+prop_inputProbs seed ni nh = runIdentity $ do
+   let hidden = M.randomish (1,(fi nh)) (0,1) seed
+       rb = rbm seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
    pp <- inputProbs rb hidden
    return $ (fi ni) == (M.row pp)
@@ -254,9 +234,9 @@ prop_inputProbs2 = runIdentity $ do
    return $ pp' == map sigmoid [i0,i1,i2]
 
 prop_energy :: Int -> Word8 -> Word8 -> Bool
-prop_energy gen ni nh = runIdentity $ do
-   let input = M.randomish (1, (fi ni)) (0,1) gen
-       rb = rbm (mkStdGen gen) (fi ni) (fi nh)
+prop_energy seed ni nh = runIdentity $ do
+   let input = M.randomish (1, (fi ni)) (0,1) seed
+       rb = rbm seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
    ee <- energy rb input
    return $ not $ isNaN ee
