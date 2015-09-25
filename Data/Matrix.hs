@@ -11,13 +11,7 @@ module Data.Matrix( Matrix(..)
                   , B
                   , I
                   , H
-                  , test
                   ) where
-
-import System.Exit (exitFailure)
-import Test.QuickCheck(verboseCheckWithResult)
-import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
-import Control.Monad.Identity(runIdentity)
 
 import Prelude as P
 import qualified Data.Array.Repa as R
@@ -117,16 +111,16 @@ class MatrixOps a b where
    {-# INLINE randomish #-}
 
    splitRows :: Int -> Matrix c a b -> [Matrix D a b]
-   splitRows nr mm = P.map (extractRows mm) chunks
+   splitRows nr m1 = P.map (extractRows m1) chunks
       where chunks = P.map maxn $ zip rixs (repeat nr)
             maxn (rix,num) 
-               | rix + num > (row mm) = (rix, (row mm) - rix)
+               | rix + num > (row m1) = (rix, (row m1) - rix)
                | otherwise = (rix, num)
-            rixs = [0,nr..(row mm)-1]
+            rixs = [0,nr..(row m1)-1]
             extractRows :: Matrix c a b -> (Int,Int) -> Matrix D a b 
-            extractRows mm@(Matrix ar) (rix,num) = Matrix $ R.extract
+            extractRows m2@(Matrix ar) (rix,num) = Matrix $ R.extract
                                                    (Z :. rix :. 0)
-                                                   (Z :. num :. (col mm))
+                                                   (Z :. num :. (col m2))
                                                    ar
    {-# INLINE splitRows #-}
          
@@ -185,20 +179,3 @@ mmultP  :: Monad m
 mmultP arr brr
  = do   trr <- R.transpose2P brr
         mmultTP arr trr
-
-prop_splitRows :: Int -> Int -> Int -> Bool
-prop_splitRows xx yy zz = (toList mm) == (concatMap toList splitted)
-                       && num == (length splitted)
-   where rr = abs xx + 1
-         cc = abs yy + 1
-         ss = abs zz + 1
-         num = ceiling $ ((fromIntegral rr)::Double) / (fromIntegral ss)
-         mm = fromList (rr,cc) $ P.map fromIntegral [1..(rr * cc)]
-         splitted = runIdentity $ mapM d2u (splitRows ss mm)
-   
-test :: IO ()
-test =  do
-   let check rr = if (isSuccess rr) then return () else exitFailure
-       cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
-       runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
-   runtest "splitRows"  prop_splitRows

@@ -6,55 +6,67 @@ Build-Type:          Simple
 Cabal-Version:       >=1.2
 
 Library
-  exposed-modules:   Data.RBM, Data.DBN, Data.NN, Data.Matrix
+  exposed-modules:   Data.RBM, Data.NN, Data.Matrix
   Build-Depends:     base,
                      random,
                      split,
                      mtl,
                      repa,
-                     QuickCheck,
-                     criterion,
+                     repa-algorithms,
+                     transformers,
                      deepseq
 
 Test-Suite test-RBM
     type:            exitcode-stdio-1.0
-    main-is:         Data/RBM.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.RBM.test
+    main-is:         Test/RBM.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.RBM.test
+    Build-Depends:   QuickCheck,
+                     monad-loops,
+                     criterion
 
 Test-Suite perf-RBM
     type:            exitcode-stdio-1.0
-    main-is:         Data/RBM.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.RBM.perf
+    main-is:         Test/RBM.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.RBM.perf
+    Build-Depends:   QuickCheck,
+                     monad-loops,
+                     criterion
 
-Test-Suite test-DBN
+Test-Suite test-Matrix
     type:            exitcode-stdio-1.0
-    main-is:         Data/DBN.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.DBN.test
+    main-is:         Test/Matrix.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.Matrix.test
+    Build-Depends:   QuickCheck
 
-Executable mnist-DBN
-    main-is:         Test/Mnist.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.Mnist.mnist
-    Build-Depends:   bytestring,
-                     repa-io,
-                     repa-algorithms,
-                     zlib,
-                     binary
-
---mnist data generation
-Executable trainbatches
-    main-is:         Data/Mnist.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateTrainBatches
-
-Executable testbatches
-    main-is:         Data/Mnist.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateTestBatches
-
-Executable bigtrainbatches
-    main-is:         Data/Mnist.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateBigTrainBatches
-
-Executable samplebatches
-    main-is:         Data/Mnist.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateSamples
-
-
+--Test-Suite test-DBN
+--    type:            exitcode-stdio-1.0
+--    main-is:         Data/DBN.hs
+--    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.DBN.test
+--
+--Executable mnist-DBN
+--    main-is:         Test/Mnist.hs
+--    ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.Mnist.mnist
+--    Build-Depends:   bytestring,
+--                     repa-io,
+--                     repa-algorithms,
+--                     zlib,
+--                     binary
+--
+----mnist data generation
+--Executable trainbatches
+--    main-is:         Data/Mnist.hs
+--    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateTrainBatches
+--
+--Executable testbatches
+--    main-is:         Data/Mnist.hs
+--    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateTestBatches
+--
+--Executable bigtrainbatches
+--    main-is:         Data/Mnist.hs
+--    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateBigTrainBatches
+--
+--Executable samplebatches
+--    main-is:         Data/Mnist.hs
+--    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateSamples
+--
+--
