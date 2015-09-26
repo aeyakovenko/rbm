@@ -36,15 +36,16 @@ sigmoid d = 1 / (1 + (exp (negate d)))
 prop_learn :: Word8 -> Word8 -> Word8 -> Bool
 prop_learn bs ni nh = runIdentity $ do
    let rbm = R.new s1 (fi ni) (fi nh)
-       (s1:s2:s3:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
+       (s1:s2:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
        fi ww = 3 + (fromIntegral ww)
        toD = fromIntegral :: (Int -> Double)
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
-       train = do RS.finishIf 100 0.05 inputs
-                  RS.contraDiv 0.25 inputs
-   erst <- fst <$> (RS.run rbm s3 $ RS.reconErr inputs)
-   lrb <- snd <$> (RS.run rbm s3 $ forever train)
+       train = do RS.setLearnRate 0.25
+                  RS.finishIf 100 0.05 inputs
+                  RS.contraDiv inputs
+   erst <- fst <$> (RS.run rbm $ RS.reconErr inputs)
+   lrb <- snd <$> (RS.run rbm $ forever train)
    recon <- R.reconstruct inputs [lrb]
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err < erst || err < 0.5)
@@ -54,14 +55,15 @@ prop_not_learn :: Word8 -> Word8 -> Word8 -> Bool
 prop_not_learn bs ni nh = runIdentity $ do
    let rbm = R.new s1 (fi ni) (fi nh) 
        fi ww = 3 + (fromIntegral ww)
-       (s1:s2:s3:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
+       (s1:s2:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
        toD = fromIntegral :: (Int -> Double)
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
-       train = do RS.finishIf 100 0.05 inputs
-                  RS.contraDiv (-0.25) inputs
-   erst <- fst <$> (RS.run rbm s3 $ RS.reconErr inputs)
-   lrb <- snd <$> (RS.run rbm s3 $ forever train)
+       train = do RS.setLearnRate (-0.25)
+                  RS.finishIf 100 0.05 inputs
+                  RS.contraDiv inputs
+   erst <- fst <$> (RS.run rbm $ RS.reconErr inputs)
+   lrb <- snd <$> (RS.run rbm $ forever train)
    recon <- R.reconstruct inputs [lrb]
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err >= erst || err >= 0.5)
