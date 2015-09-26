@@ -18,6 +18,7 @@ import Data.Matrix(Matrix(..)
 data RBMS = RBMS { _rbm :: R.RBM
                  , _seed :: Int
                  , _count :: Int
+                 , _learnRate :: Double
                  }
 
 type TrainT m a = E.ExceptT a (S.StateT RBMS m) a
@@ -39,20 +40,20 @@ finishIf n e b = do
    when (e > err) finish_
    return ()
 
-run :: Monad m => R.RBM -> Int -> TrainT m a -> m (a, R.RBM)
-run rb seed action = do
-   (a,rbms) <- S.runStateT (E.runExceptT action) (RBMS rb seed 0)
+run :: Monad m => R.RBM -> TrainT m a -> m (a, R.RBM)
+run rb action = do
+   (a,rbms) <- S.runStateT (E.runExceptT action) (RBMS rb 0 0 0.001)
    let unEither (Left v) = v
        unEither (Right v) = v
    return (unEither a, _rbm rbms)
 
 -- |Run Constrastive Divergance learning in the State monad
 contraDiv :: (Monad m, E.MonadError a m, S.MonadState RBMS m) 
-          => Double -> Matrix U B I -> m ()
-contraDiv lc bxi = do 
-   (RBMS !ixh seed cnt) <- S.get 
+          => Matrix U B I -> m ()
+contraDiv bxi = do 
+   (RBMS !ixh seed cnt lc) <- S.get 
    !uixh <- R.contraDiv lc ixh seed bxi
-   S.put (RBMS uixh (seed + 1) (cnt + 1))
+   S.put (RBMS uixh (seed + 1) (cnt + 1) lc)
 
 -- |Compute the input reconstruction error with the current RBM in the state.
 reconErr :: (Monad m, E.MonadError a m, S.MonadState RBMS m) 
@@ -68,3 +69,11 @@ count :: (Monad m, E.MonadError a m, S.MonadState RBMS m)
 count = do
    rbms <- S.get 
    return $ _count rbms
+
+setLearnRate :: (Monad m, E.MonadError a m, S.MonadState RBMS m) 
+             => Double -> m ()
+setLearnRate d = S.get >>= \ x -> S.put x { _learnRate = d }
+
+getLearnRate :: (Monad m, E.MonadError a m, S.MonadState RBMS m) 
+             => m Double
+getLearnRate = _learnRate <$> S.get 
