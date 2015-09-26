@@ -243,14 +243,14 @@ mnist = do
    printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
-   let read2 ix = M.cast <$> hiddenPs r0 =<< readBatch ix
+   let read2 ix = M.cast2 <$> hiddenPs r0 =<< readBatch ix
    tr1 <- snd <$> (RS.run r1 0 $ mapM_ (train 0.001 read2) [0..468::Int])
    genSample "dist/sample.2" tr1
    w1 <- M.cast1 <$> M.transpose tr1
    printSamples 28 "dist/weights.2.bmp" w1
 
    --train the third layer
-   let read3 ix = M.cast <$> hiddenPs r1 =<< read2 ix
+   let read3 ix = M.cast2 <$> hiddenPs r1 =<< read2 ix
    tr2 <- snd <$> (RS.run r0 0 $ mapM_ (train 0.001 read3) [0..468::Int])
    genSample "dist/sample.2" tr2
    w2 <- M.cast1 <$> M.transpose tr2
