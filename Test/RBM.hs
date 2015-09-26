@@ -157,10 +157,9 @@ perf = do
                       , bench "127x127"  $ whnf (prop_inputProbs 127) 127
                       , bench "255x255"  $ whnf (prop_inputProbs 255) 255
                       ]
-      ,bgroup "learn" [ bench "15"  $ whnf (prop_learn 15 15) 15
-                      , bench "63x63"  $ whnf (prop_learn 63 63) 63
-                      , bench "127x127"  $ whnf (prop_learn 127 127) 127
-                      , bench "255x255"  $ whnf (prop_learn 255 255) 255
+      ,bgroup "learn" [ bench "7"  $ whnf (prop_learn 7 7) 7
+                      , bench "15"  $ whnf (prop_learn 15 15) 15
+                      , bench "32x32"  $ whnf (prop_learn 32 32) 32
                       ]
       ]
    putStrLn $ "perf log written to " ++ file
