@@ -2,7 +2,6 @@
 module Data.RBM(newRBM
                ,RBM
                ,contraDiv
-               ,contraDivS
                ,energy
                ,hiddenPs
                ,inputPs
@@ -11,9 +10,7 @@ module Data.RBM(newRBM
                ) where
 
 import qualified System.Random as R
-import qualified Control.Monad.Trans.State.Strict as S
 import qualified Data.Matrix as M
-
 import Data.Matrix(Matrix(..)
                   ,(*^)
                   ,(+^)
@@ -45,27 +42,18 @@ energy rb bxi = do
 reconstruct :: Monad m => Matrix U I H -> Matrix U B I -> m (Matrix U B I)
 reconstruct ixh ins = M.transpose =<< inputPs ixh =<< hiddenPs ixh ins
  
--- |Run Constrastive Divergance learning in the State monad
-contraDivS :: Monad m => Double -> Matrix U B I -> S.StateT (Matrix U I H, Int) m Double
-contraDivS lc bxi = do 
-   (!ixh,seed) <- S.get 
-   (!uixh, err) <- contraDiv lc ixh seed bxi
-   S.put (uixh, seed + 1)
-   return err
-
+  
 -- |Run Contrastive Divergance learning.  Return the updated RBM
-contraDiv :: (Monad m) => Double -> (Matrix U I H) -> Int -> Matrix U B I -> m (Matrix U I H, Double)
+contraDiv :: (Monad m) => Double -> (Matrix U I H) -> Int -> Matrix U B I -> m (Matrix U I H)
 contraDiv lc ixh seed bxi = do
    !wd <- weightDiff seed ixh bxi
    !uave <- M.sum $ M.map abs wd
    !wave <- M.sum $ M.map abs ixh
    let lc' = if wave > uave || uave == 0 
-               then lc 
-               else (wave / uave) * lc 
-   let wd' = M.map ((*) lc') wd
-   urbm <- M.d2u $ ixh +^ wd'
-   err <- M.mse wd'
-   return (urbm, err)
+             then lc 
+             else (wave / uave) * lc 
+       wd' = M.map ((*) lc') wd
+   M.d2u $ ixh +^ wd'
 {-# INLINE contraDiv #-}
 
 weightDiff :: Monad m => Int -> Matrix U I H -> Matrix U B I -> m (Matrix U I H)
@@ -86,7 +74,7 @@ weightDiff seed ixh bxi = do
 hiddenPs :: (Monad m) => RBM -> (Matrix U B I) -> m (Matrix U B H)
 hiddenPs ixh bxi = do
    !bxh <- bxi `M.mmult` ixh 
-   let update v r _ | r == 0 = 1 -- ^ set bias output to 1
+   let update v _ c | c == 0 = 1 -- ^ set bias output to 1
                     | otherwise = sigmoid v
    M.d2u $ M.traverse update bxh
 {-# INLINE hiddenPs #-}
@@ -99,7 +87,7 @@ hiddenPs ixh bxi = do
 inputPs :: (Monad m) => (Matrix U I H) -> (Matrix U B H) -> m (Matrix U I B)
 inputPs ixh bxh = do
    !ixb <- ixh `M.mmultT` bxh
-   let update v _ c | c == 0 = 1 -- ^ set bias output to 1
+   let update v r _ | r == 0 = 1 -- ^ set bias output to 1
                     | otherwise = sigmoid v
    M.d2u $ M.traverse update ixb
 {-# INLINE inputPs #-}

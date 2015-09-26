@@ -3,15 +3,15 @@ module Test.RBM(perf
                ) where
 
 --local
-import Data.RBM
+import Data.RBM as R
+import Data.RBM.State as RS
 import qualified Data.Matrix as M
 
 import Data.Matrix((-^))
 
 --utils
-import qualified System.Random as R
+import qualified System.Random as Rnd
 import Control.Monad.Identity(runIdentity)
-import qualified Control.Monad.Trans.State.Strict as S
 
 --benchmark modules
 import Criterion.Main(defaultMainWith,defaultConfig,bgroup,bench,whnf)
@@ -22,10 +22,11 @@ import System.Exit (exitFailure)
 import Test.QuickCheck(verboseCheckWithResult)
 import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
-import Control.Monad.Loops(iterateUntil)
+
+import Debug.Trace(traceShowId)
 
 seeds :: Int -> [Int] 
-seeds seed = R.randoms (R.mkStdGen seed)
+seeds seed = Rnd.randoms (Rnd.mkStdGen seed)
 
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
@@ -35,28 +36,30 @@ prop_learn :: Word8 -> Word8 -> Word8 -> Bool
 prop_learn bs ni nh = runIdentity $ do
    let rbm = newRBM s1 (fi ni) (fi nh)
        (s1:s2:s3:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
-       fi ww = 1 + (fromIntegral ww)
-       roundD = fromIntegral . (round :: Double -> Int)
-   inputs <- M.d2u $ M.map roundD $ M.randomish (fi ni, fi nh) (0, 1) s2
-   let script = iterateUntil (0.05>) (contraDivS 0.001 inputs)
-   (lrb,_) <- snd <$> S.runStateT script (rbm,s3) 
+       fi ww = 3 + (fromIntegral ww)
+       toD = fromIntegral :: (Int -> Double)
+       bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
+       inputs = M.fromList (fi bs, fi ni) bits
+   erst <- fst <$> (RS.run rbm s3 $ reconErr inputs)
+   lrb <-  snd <$> (RS.run rbm s3 $ train 0.25 100 (0.05>) inputs)
    recon <- reconstruct lrb inputs
-   err <- M.mse (inputs -^ recon)
-   return $ (err < 0.1)
+   err <- traceShowId <$> M.mse (inputs -^ recon)
+   return $ (err < erst || err < 0.5)
 
 -- |test to see if we fail to rearn with a negative learning rate
 prop_not_learn :: Word8 -> Word8 -> Word8 -> Bool
 prop_not_learn bs ni nh = runIdentity $ do
    let rbm = newRBM s1 (fi ni) (fi nh) 
-       fi ww = 1 + (fromIntegral ww)
+       fi ww = 3 + (fromIntegral ww)
        (s1:s2:s3:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
-       roundD = fromIntegral . (round :: Double -> Int)
-   inputs <- M.d2u $ M.map roundD $ M.randomish (fi ni, fi nh) (0, 1) s2
-   let script = iterateUntil (0.95<) (contraDivS 0.001 inputs)
-   (lrb,_) <- snd <$> S.runStateT script (rbm,s3) 
+       toD = fromIntegral :: (Int -> Double)
+       bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
+       inputs = M.fromList (fi bs, fi ni) bits
+   erst <- fst <$> (RS.run rbm s3 $ reconErr inputs)
+   lrb <- snd <$> (RS.run rbm s3 $ train (-0.25) 100 (0.95<) inputs)
    recon <- reconstruct lrb inputs
-   err <- M.mse (inputs -^ recon)
-   return $ (err > 0.9)
+   err <- traceShowId <$> M.mse (inputs -^ recon)
+   return $ (err >= erst || err >= 0.5)
 
 prop_init :: Word8 -> Word8 -> Bool
 prop_init ni nh = (fi ni) * (fi nh)  == (M.elems rb)
@@ -77,7 +80,7 @@ prop_hiddenProbs ni nh = runIdentity $ do
 
 prop_hiddenProbs2 :: Bool
 prop_hiddenProbs2 = runIdentity $ do
-   let h0 = w00 * i0 + w10 * i1
+   let --h0 = w00 * i0 + w10 * i1
        h1 = w01 * i0 + w11 * i1
        h2 = w02 * i0 + w12 * i1
        i0:i1:_ = [1..]
@@ -86,7 +89,7 @@ prop_hiddenProbs2 = runIdentity $ do
        input = M.fromList (1,2) $ [i0,i1]
        rb = M.fromList (2,3) wws
    pp <- M.toList <$> hiddenPs rb input
-   return $ pp == map sigmoid [h0, h1, h2]
+   return $ pp == 1:(map sigmoid [h1, h2])
 
 prop_inputProbs :: Word8 -> Word8 -> Bool
 prop_inputProbs ni nh = runIdentity $ do
@@ -99,7 +102,7 @@ prop_inputProbs ni nh = runIdentity $ do
 
 prop_inputProbs2 :: Bool
 prop_inputProbs2 = runIdentity $ do
-   let i0 = w00 * h0 + w10 * h1
+   let --i0 = w00 * h0 + w10 * h1
        i1 = w01 * h0 + w11 * h1
        i2 = w02 * h0 + w12 * h1
        h0:h1:_ = [1..]
@@ -110,7 +113,7 @@ prop_inputProbs2 = runIdentity $ do
    rb' <- M.transpose rb
    pp <- inputPs rb' hiddens
    pp' <- M.toList <$> M.transpose pp
-   return $ pp' == map sigmoid [i0,i1,i2]
+   return $ pp' == 1:(map sigmoid [i1,i2])
 
 prop_energy :: Word8 -> Word8 -> Bool
 prop_energy ni nh = runIdentity $ do

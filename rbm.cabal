@@ -6,7 +6,7 @@ Build-Type:          Simple
 Cabal-Version:       >=1.2
 
 Library
-  exposed-modules:   Data.RBM, Data.NN, Data.Matrix
+  exposed-modules:   Data.RBM, Data.RBM.State, Data.NN, Data.Matrix
   Build-Depends:     base,
                      random,
                      split,
@@ -14,6 +14,7 @@ Library
                      repa,
                      repa-algorithms,
                      transformers,
+                     monad-loops,
                      deepseq
 
 Test-Suite test-RBM
