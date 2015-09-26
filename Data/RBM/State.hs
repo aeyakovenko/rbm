@@ -34,9 +34,9 @@ finishIf :: (Monad m, E.MonadError () m, S.MonadState RBMS m)
       => Int -> Double -> Matrix U B I -> m ()
 finishIf n e b = do 
    cnt <- count
-   when (n > cnt) finish_
+   when (n < cnt) finish_
    err <- reconErr b
-   when (e < err) finish_
+   when (e > err) finish_
    return ()
 
 run :: Monad m => R.RBM -> Int -> TrainT m a -> m (a, R.RBM)

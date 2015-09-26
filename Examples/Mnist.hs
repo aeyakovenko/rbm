@@ -1,5 +1,6 @@
 --from https://github.com/mhwombat/backprop-example/blob/master/Mnist.hs
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Examples.Mnist (generateTrainBatches
                       ,generateTestBatches
                       ,readArray
@@ -9,8 +10,8 @@ module Examples.Mnist (generateTrainBatches
                       )
   where
 
-import Control.Monad.Trans(lift)
-import Control.Monad(when)
+import Control.Monad.Trans(liftIO)
+import Control.Monad(when,forever)
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Get
 import qualified Data.Binary as B
@@ -213,16 +214,22 @@ mnist :: IO ()
 mnist = do 
    let name ix = "dist/train" ++ (show ix)
        batchids = [0..468::Int]
+
        readBatch :: Int -> IO (Matrix U B I)
        readBatch ix = Matrix <$> readArray (name ix)
+       
+       train :: (Int -> IO (Matrix U B I)) -> Int -> RS.TrainT IO ()
        train readb ix = do
-            batch <- lift $ readb ix
+            batch <- liftIO $ readb ix
             RS.contraDiv 0.001 batch
             cnt <- RS.count
             when (0 == cnt `mod` 20) $ do
                err <- RS.reconErr batch
-               lift $ putStrLn (show err)
-               when (err < 0.05 || cnt > 1000) $ fail "done"
+               liftIO $ print (cnt, err)
+               when (cnt > 1000 || err < 0.05) $ RS.finish_
+            return ()
+
+
        r1 = RB.new 0 785 501
        r2 = RB.new 0 501 501
        r3 = RB.new 0 501 11
@@ -235,24 +242,20 @@ mnist = do
    printSamples 28 "dist/weights.0.bmp" w0
 
    --train the first layer
-   tr1 <- snd <$> (RS.run r1 0 $ mapM_ (train readBatch) batchids)
+   tr1 <- snd <$> (RS.run r1 0 $ forever $ mapM_ (train readBatch) batchids)
    genSample "dist/sample.1." [tr1]
    w1 <- M.cast1 <$> M.transpose tr1
    printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
    let read2 ix = M.cast2 <$> (RB.hiddenPs tr1 =<< readBatch ix)
-   tr2 <- snd <$> (RS.run r2 0 $ mapM_ (train read2) batchids)
+   tr2 <- snd <$> (RS.run r2 0 $ forever $ mapM_ (train read2) batchids)
    genSample "dist/sample.2" [tr1,tr2]
-   w2 <- M.cast1 <$> M.transpose tr2
-   printSamples 28 "dist/weights.2.bmp" w2
 
    --train the third layer
    let read3 ix = M.cast2 <$> (RB.hiddenPs tr2 =<< read2 ix)
-   tr3 <- snd <$> (RS.run r3 0 $ mapM_ (train read3) batchids)
+   tr3 <- snd <$> (RS.run r3 0 $ forever $ mapM_ (train read3) batchids)
    genSample "dist/sample.3" [tr1,tr2,tr3]
-   w3 <- M.cast1 <$> M.transpose tr3
-   printSamples 28 "dist/weights.3.bmp" w3
 
 
 --   let nn = dd
