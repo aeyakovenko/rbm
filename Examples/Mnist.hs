@@ -217,7 +217,7 @@ mnist = do
        script lc batch = do
          RS.contraDiv lc batch
          cnt <- RS.count
-         when (0 == cnt `mod` 100) $ do
+         when (0 == cnt `mod` 20) $ do
             err <- RS.reconErr batch
             lift $ putStrLn (show err)
 

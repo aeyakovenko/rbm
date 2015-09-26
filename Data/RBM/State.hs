@@ -18,9 +18,12 @@ data RBMS = RBMS { _rbm :: R.RBM
                  , _count :: Int
                  }
 
+rbm :: Monad m => S.StateT RBMS m R.RBM
+rbm = _rbm <$> S.get
+
 run :: Monad m => R.RBM -> Int -> S.StateT RBMS m a -> m (a, R.RBM)
-run rbm seed action = do
-   (a,rbms) <- S.runStateT action (RBMS rbm seed 0)
+run rb seed action = do
+   (a,rbms) <- S.runStateT action (RBMS rb seed 0)
    return (a, _rbm rbms)
 
 train :: Monad m => Double -> Int -> (Double -> Bool) -> Matrix U B I -> S.StateT RBMS m ()
