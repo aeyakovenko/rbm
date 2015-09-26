@@ -11,7 +11,7 @@ module Examples.Mnist (generateTrainBatches
   where
 
 import Control.Monad.Trans(liftIO)
-import Control.Monad(when,forever)
+import Control.Monad(when,forever,forM_)
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Get
 import qualified Data.Binary as B
@@ -220,14 +220,15 @@ mnist = do
        
        train :: (Int -> IO (Matrix U B I)) -> Int -> RS.TrainT IO ()
        train readb ix = do
-            batch <- liftIO $ readb ix
-            RS.contraDiv 0.001 batch
-            cnt <- RS.count
-            when (0 == cnt `mod` 20) $ do
-               err <- RS.reconErr batch
-               liftIO $ print (cnt, err)
-               when (cnt > 1000 || err < 0.05) $ RS.finish_
-            return ()
+            big <- liftIO $ readb ix
+            small <- mapM M.d2u $ M.splitRows 10 big
+            forM_ small $ \ batch -> do
+               RS.contraDiv 0.001 batch
+               cnt <- RS.count
+               when (0 == cnt `mod` 20) $ do
+                  err <- RS.reconErr batch
+                  liftIO $ print (cnt, err)
+                  when (cnt > 10000 || err < 0.05) $ RS.finish_
 
 
        r1 = RB.new 0 785 501

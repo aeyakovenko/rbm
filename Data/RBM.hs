@@ -51,7 +51,7 @@ backward bxh rbm = M.cast2 <$> (M.transpose =<< inputPs rbm bxh)
 reconstruct :: Monad m => Matrix U B I -> [RBM] -> m (Matrix U B I)
 reconstruct ins ixhs = do 
    bxh <- M.cast2 <$> foldM forward ins ixhs
-   M.cast2 <$> foldM backward bxh ixhs 
+   M.cast2 <$> foldM backward bxh (reverse ixhs)
 
 -- |Run Contrastive Divergance learning.  Return the updated RBM
 contraDiv :: (Monad m) => Double -> (Matrix U I H) -> Int -> Matrix U B I -> m (Matrix U I H)

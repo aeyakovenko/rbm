@@ -129,6 +129,15 @@ prop_energy ni nh = runIdentity $ do
    ee <- R.energy rb input
    return $ not $ isNaN ee
 
+prop_recon :: Word8 -> Word8 -> Word8 -> Word8 -> Bool
+prop_recon bs ni nh no = runIdentity $ do
+   let input = M.randomish (fi bs, fi ni) (0,1) seed
+       r1 = R.new seed (fi ni) (fi nh)
+       r2 = R.new seed (fi nh) (fi no)
+       fi ww = 1 + (fromIntegral ww)
+       seed = (fi ni) * (fi nh)
+   recons <- R.reconstruct input [r1,r2]
+   return $ M.shape recons == M.shape input
 
 test :: IO ()
 test = do
@@ -141,9 +150,9 @@ test = do
    runtest "hiddenp2"  prop_hiddenProbs2
    runtest "inputp"    prop_inputProbs
    runtest "inputp2"   prop_inputProbs2
+   runtest "recon"     prop_recon
    runtest "learn"     prop_learn
    runtest "not_learn" prop_not_learn
-
 
 perf :: IO ()
 perf = do
