@@ -6,7 +6,10 @@ Build-Type:          Simple
 Cabal-Version:       >=1.2
 
 Library
-  exposed-modules:   Data.RBM, Data.RBM.State, Data.NN, Data.Matrix
+  exposed-modules:   Data.RBM,
+                     Data.RBM.State,
+                     Data.NN,
+                     Data.Matrix
   Build-Depends:     base,
                      random,
                      split,
@@ -39,20 +42,16 @@ Test-Suite test-Matrix
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.Matrix.test
     Build-Depends:   QuickCheck
 
---Test-Suite test-DBN
---    type:            exitcode-stdio-1.0
---    main-is:         Data/DBN.hs
---    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.DBN.test
---
---Executable mnist-DBN
---    main-is:         Test/Mnist.hs
---    ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.Mnist.mnist
---    Build-Depends:   bytestring,
---                     repa-io,
---                     repa-algorithms,
---                     zlib,
---                     binary
---
+Executable mnist
+    main-is:         Examples/Mnist.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.mnist
+    Build-Depends:   bytestring,
+                     repa-io,
+                     repa-algorithms,
+                     zlib,
+                     transformers,
+                     binary
+
 ----mnist data generation
 --Executable trainbatches
 --    main-is:         Data/Mnist.hs

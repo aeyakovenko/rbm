@@ -3,14 +3,12 @@
 module Data.NN where
  
 import qualified Data.Matrix as M
-import Control.DeepSeq(NFData)
 import Control.Monad(foldM)
 import Data.Matrix(Matrix(..)
                   ,(*^)
                   ,(+^)
                   ,(-^)
                   ,U
-                  ,D
                   ,I
                   ,B
                   ,H
@@ -71,9 +69,9 @@ backPropOutput obj ebj = M.d2u $ ebj *^ obj
 --calculate the  backprop for the hidden layers
 backPropHidden :: Monad m => Matrix U B H -> (Matrix U B I, Matrix U I H) -> m (Matrix U B I)
 backPropHidden ebj (obi,wij) = do
-   ebj <- M.transpose =<< wij `M.mmultT` ebj
+   ebj' <- M.transpose =<< wij `M.mmultT` ebj
    let dbi = M.map dsigmoid obi
-   M.d2u $ dbi *^ (M.cast2 ebj)
+   M.d2u $ dbi *^ (M.cast2 ebj')
 {-# INLINE backPropHidden #-}
 
 scanForward :: Monad m => Matrix U B I -> NN -> m ([Matrix U B H])
@@ -84,7 +82,7 @@ scanForward ins nns = (map M.cast2) <$> scanM feed ins nns
 feedForward1 :: Monad m => Matrix U B I -> Matrix U I H -> m (Matrix U B H)
 feedForward1 !ibi wij = do
    sbj <- ibi `M.mmult` wij
-   let update v r c | c == 0 = 1 -- ^ set bias output to 1
+   let update v r _ | r == 0 = 1 -- ^ set bias output to 1
                     | otherwise = sigmoid v
    M.d2u $ M.traverse update sbj
 {-# INLINE feedForward1 #-}

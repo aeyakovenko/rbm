@@ -34,7 +34,7 @@ sigmoid d = 1 / (1 + (exp (negate d)))
 -- |test to see if we can learn a random string
 prop_learn :: Word8 -> Word8 -> Word8 -> Bool
 prop_learn bs ni nh = runIdentity $ do
-   let rbm = newRBM s1 (fi ni) (fi nh)
+   let rbm = new s1 (fi ni) (fi nh)
        (s1:s2:s3:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
        fi ww = 3 + (fromIntegral ww)
        toD = fromIntegral :: (Int -> Double)
@@ -49,7 +49,7 @@ prop_learn bs ni nh = runIdentity $ do
 -- |test to see if we fail to rearn with a negative learning rate
 prop_not_learn :: Word8 -> Word8 -> Word8 -> Bool
 prop_not_learn bs ni nh = runIdentity $ do
-   let rbm = newRBM s1 (fi ni) (fi nh) 
+   let rbm = new s1 (fi ni) (fi nh) 
        fi ww = 3 + (fromIntegral ww)
        (s1:s2:s3:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
        toD = fromIntegral :: (Int -> Double)
@@ -65,13 +65,13 @@ prop_init :: Word8 -> Word8 -> Bool
 prop_init ni nh = (fi ni) * (fi nh)  == (M.elems rb)
    where
       seed = (fi ni) * (fi nh)
-      rb = newRBM seed (fi ni) (fi nh)
+      rb = new seed (fi ni) (fi nh)
       fi :: Word8 -> Int
       fi ww = 1 + (fromIntegral ww)
 
 prop_hiddenProbs :: Word8 -> Word8 -> Bool
 prop_hiddenProbs ni nh = runIdentity $ do
-   let rb = newRBM seed (fi ni) (fi nh)
+   let rb = new seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
        input = M.randomish (1, (fi ni)) (0,1) seed
        seed = (fi ni) * (fi nh)
@@ -94,7 +94,7 @@ prop_hiddenProbs2 = runIdentity $ do
 prop_inputProbs :: Word8 -> Word8 -> Bool
 prop_inputProbs ni nh = runIdentity $ do
    let hidden = M.randomish (1,(fi nh)) (0,1) seed
-       rb = newRBM seed (fi ni) (fi nh)
+       rb = new seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
        seed = (fi ni) * (fi nh)
    pp <- inputPs rb hidden
@@ -118,7 +118,7 @@ prop_inputProbs2 = runIdentity $ do
 prop_energy :: Word8 -> Word8 -> Bool
 prop_energy ni nh = runIdentity $ do
    let input = M.randomish (1, (fi ni)) (0,1) seed
-       rb = newRBM seed (fi ni) (fi nh)
+       rb = new seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
        seed = (fi ni) * (fi nh)
    ee <- energy rb input

@@ -1,5 +1,4 @@
 cabal_files=rbm.cabal
-tix_files=perf-repa-RBM.tix
 
 hs_files=Data/RBM.hs\
 			Data/NN.hs\
@@ -7,17 +6,16 @@ hs_files=Data/RBM.hs\
 			Data/DBN.hs\
 			Examples/Mnist.hs
 
-tix_files=perf-repa-RBM.tix\
+tix_files=perf-RBM.tix\
 			 trainbatches.tix\
 			 testbatches.tix\
-			 mnist-DBN.tix\
-			 test-repa-DBN.tix\
-			 test-repa-RBM.tix\
+			 mnist.tix\
+			 test-RBM.tix\
 			 bigtrainbatches.tix\
-			 test-DBN.tix\
 			 console.tix
 
-all:dist/cabal.test.ok dist/cabal.build.ok
+all:mnist
+#all:dist/cabal.test.ok dist/cabal.build.ok
 
 dist/cabal.test.ok:$(hs_files) dist/setup-config tix
 	cabal test 2>&1
@@ -34,8 +32,8 @@ test:tix
 	cabal test 2>&1
 
 mnist:tix
-	cabal build mnist-DBN
-	./dist/build/mnist-DBN/mnist-DBN +RTS -N
+	cabal build mnist
+	./dist/build/mnist/mnist +RTS -N
 
 batches:tix
 	cabal build testbatches

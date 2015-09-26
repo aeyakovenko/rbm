@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
-module Data.RBM(newRBM
+module Data.RBM(new
                ,RBM
                ,contraDiv
                ,energy
@@ -26,8 +26,8 @@ import Data.Matrix(Matrix(..)
 type RBM = Matrix U I H
 
 -- |Create an rbm with some randomized weights
-newRBM :: Int -> Int -> Int -> RBM
-newRBM seed ni nh = M.randomish (ni, nh) (-0.01, 0.01) seed
+new :: Int -> Int -> Int -> RBM
+new seed ni nh = M.randomish (ni, nh) (-0.01, 0.01) seed
 
 -- |Compute the energy of the RBM with the batch of input.
 energy :: (Monad m) => RBM -> (Matrix U B I) -> m Double
