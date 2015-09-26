@@ -14,8 +14,8 @@ tix_files=perf-RBM.tix\
 			 bigtrainbatches.tix\
 			 console.tix
 
-#all:mnist
-all:dist/cabal.test.ok dist/cabal.build.ok
+all:mnist
+#all:dist/cabal.test.ok dist/cabal.build.ok
 
 dist/cabal.test.ok:$(hs_files) dist/setup-config tix
 	cabal test 2>&1
