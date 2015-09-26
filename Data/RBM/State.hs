@@ -42,7 +42,7 @@ contraDiv lc bxi = do
 reconErr :: Monad m => Matrix U B I -> S.StateT RBMS m Double
 reconErr bxi = do
    rbms <- S.get 
-   bxi' <- R.reconstruct (_rbm rbms) bxi
+   bxi' <- R.reconstruct bxi (_rbm rbms)
    M.mse $ bxi' -^ bxi
 
 -- |Return how many times we have executed contraDiv

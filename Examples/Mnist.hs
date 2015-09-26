@@ -10,7 +10,7 @@ module Examples.Mnist (generateTrainBatches
   where
 
 import Control.Monad.Trans(lift)
-import Control.Monad(when)
+import Control.Monad(when, foldM)
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Get
 import qualified Data.Binary as B
@@ -196,7 +196,7 @@ printSamples imagewidth sfile (Matrix bxi) = do
    putStrLn $ concat ["generating image: ", sfile]
    R.writeImageToBMP sfile strip
 
-genSample:: String -> RBM.RBM -> IO ()
+genSample:: String -> [RBM.RBM] -> IO ()
 genSample sname db = do
    let imagewidth = 28
        regenSample :: Int -> IO ()
@@ -205,7 +205,7 @@ genSample sname db = do
             let name = "dist/sample" ++ (show ix)
                 readBatch = Matrix <$> (readArray name)
             bxi <- readBatch
-            bxi' <- RBM.reconstruct db bxi
+            bxi' <- foldM RBM.reconstruct bxi (reverse db)
             printSamples imagewidth sfile bxi'
    mapM_ regenSample [0..9::Int] 
 
@@ -221,23 +221,41 @@ mnist = do
             err <- RS.reconErr batch
             lift $ putStrLn (show err)
 
-       train lc ix = do
-            batch <- lift $ readBatch ix
+       train lc readb ix = do
+            batch <- lift $ readb ix
             small <- mapM M.d2u $ M.splitRows 10 batch
             mapM_ (script lc) small
 
-       r0 = RBM.new 0 785 501
-       --r1 = RBM.newRBM 0 501 501
-       --r2 = RBM.newRBM 0 501 11
+       r1 = RBM.new 0 785 501
+       r2 = RBM.new 0 501 501
+       --r3 = RBM.newRBM 0 501 11
+   
+   --output without a trainining
+   (readBatch 0) >>= (printSamples 28 "dist/original.0.bmp")
+   genSample "dist/sample.0." r1
+   w0 <- M.cast1 <$> M.transpose r1
+   printSamples 28 "dist/weights.0.bmp" w0
 
-   (readBatch 0) >>= (printSamples 28 "dist/original.bmp")
-   genSample "dist/strip.0." r0
-   ds <- M.cast1 <$> M.transpose r0
-   printSamples 28 "dist/weights.0.bmp" ds
-   tr0 <- snd <$> (RS.run r0 0 $ mapM_ (train 0.1) [0..468::Int])
-   genSample "dist/strip1.p1." tr0
-   w0 <- M.cast1 <$> M.transpose tr0
-   printSamples 28 "dist/weights.1.p1.bmp" w0
+   --train the first layer
+   tr1 <- snd <$> (RS.run r1 0 $ mapM_ (train 0.01 readBatch) [0..468::Int])
+   genSample "dist/sample.1." tr1
+   w1 <- M.cast1 <$> M.transpose tr1
+   printSamples 28 "dist/weights.1.bmp" w1
+
+   --train the second layer
+   let read2 ix = M.cast <$> hiddenPs r0 =<< readBatch ix
+   tr1 <- snd <$> (RS.run r1 0 $ mapM_ (train 0.001 read2) [0..468::Int])
+   genSample "dist/sample.2" tr1
+   w1 <- M.cast1 <$> M.transpose tr1
+   printSamples 28 "dist/weights.2.bmp" w1
+
+   --train the third layer
+   let read3 ix = M.cast <$> hiddenPs r1 =<< read2 ix
+   tr2 <- snd <$> (RS.run r0 0 $ mapM_ (train 0.001 read3) [0..468::Int])
+   genSample "dist/sample.2" tr2
+   w2 <- M.cast1 <$> M.transpose tr2
+   printSamples 28 "dist/weights.2.bmp" w2
+
 
 --   dd <- DBN.learnLast iobatches p2 dd
 --   genSample "dist/strip.1.p2." dd

@@ -39,10 +39,9 @@ energy rb bxi = do
    return $ negate enr
 
 -- |Reconstruct the input
-reconstruct :: Monad m => Matrix U I H -> Matrix U B I -> m (Matrix U B I)
-reconstruct ixh ins = M.transpose =<< inputPs ixh =<< hiddenPs ixh ins
- 
-  
+reconstruct :: Monad m => Matrix U B I -> Matrix U I H -> m (Matrix U B I)
+reconstruct ins ixh = M.transpose =<< inputPs ixh =<< hiddenPs ixh ins
+
 -- |Run Contrastive Divergance learning.  Return the updated RBM
 contraDiv :: (Monad m) => Double -> (Matrix U I H) -> Int -> Matrix U B I -> m (Matrix U I H)
 contraDiv lc ixh seed bxi = do

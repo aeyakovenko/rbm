@@ -42,7 +42,7 @@ prop_learn bs ni nh = runIdentity $ do
        inputs = M.fromList (fi bs, fi ni) bits
    erst <- fst <$> (RS.run rbm s3 $ RS.reconErr inputs)
    lrb <-  snd <$> (RS.run rbm s3 $ RS.train 0.25 100 (0.05>) inputs)
-   recon <- R.reconstruct lrb inputs
+   recon <- R.reconstruct inputs lrb 
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err < erst || err < 0.5)
 
@@ -57,7 +57,7 @@ prop_not_learn bs ni nh = runIdentity $ do
        inputs = M.fromList (fi bs, fi ni) bits
    erst <- fst <$> (RS.run rbm s3 $ RS.reconErr inputs)
    lrb <- snd <$> (RS.run rbm s3 $ RS.train (-0.25) 100 (0.95<) inputs)
-   recon <- R.reconstruct lrb inputs
+   recon <- R.reconstruct inputs lrb 
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err >= erst || err >= 0.5)
 
@@ -142,7 +142,7 @@ test = do
 
 perf :: IO ()
 perf = do
-   let file = "dist/perf-repa-RBM.html"
+   let file = "dist/perf-RBM.html"
        cfg = defaultConfig { reportFile = Just file, timeLimit = 1.0 }
    defaultMainWith cfg [
        bgroup "energy" [ bench "63x63"  $ whnf (prop_energy 63) 63
@@ -159,7 +159,6 @@ perf = do
                       ]
       ,bgroup "learn" [ bench "7"  $ whnf (prop_learn 7 7) 7
                       , bench "15"  $ whnf (prop_learn 15 15) 15
-                      , bench "32x32"  $ whnf (prop_learn 32 32) 32
                       ]
       ]
    putStrLn $ "perf log written to " ++ file
