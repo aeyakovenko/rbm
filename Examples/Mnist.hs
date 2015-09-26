@@ -10,7 +10,7 @@ module Examples.Mnist (generateTrainBatches
   where
 
 import Control.Monad.Trans(lift)
-import Control.Monad(when, foldM)
+import Control.Monad(when)
 import qualified Data.ByteString.Lazy as BL
 import Data.Binary.Get
 import qualified Data.Binary as B
@@ -197,7 +197,7 @@ printSamples imagewidth sfile (Matrix bxi) = do
    R.writeImageToBMP sfile strip
 
 genSample:: String -> [RB.RBM] -> IO ()
-genSample sname db = do
+genSample sname rbms = do
    let imagewidth = 28
        regenSample :: Int -> IO ()
        regenSample ix = do
@@ -205,7 +205,7 @@ genSample sname db = do
             let name = "dist/sample" ++ (show ix)
                 readBatch = Matrix <$> (readArray name)
             bxi <- readBatch
-            bxi' <- foldM RB.reconstruct bxi (reverse db)
+            bxi' <- RB.reconstruct bxi rbms
             printSamples imagewidth sfile bxi'
    mapM_ regenSample [0..9::Int] 
 
@@ -217,7 +217,7 @@ mnist = do
        script lc batch = do
          RS.contraDiv lc batch
          cnt <- RS.count
-         when (0 == cnt `mod` 20) $ do
+         when (0 == cnt `mod` 10) $ do
             err <- RS.reconErr batch
             lift $ putStrLn (show err)
 

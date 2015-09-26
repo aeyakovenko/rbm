@@ -41,8 +41,8 @@ contraDiv lc bxi = do
 -- |Compute the input reconstruction error with the current RBM in the state.
 reconErr :: Monad m => Matrix U B I -> S.StateT RBMS m Double
 reconErr bxi = do
-   rbms <- S.get 
-   bxi' <- R.reconstruct bxi (_rbm rbms)
+   rbms <- S.get
+   bxi' <- R.reconstruct bxi [(_rbm rbms)]
    M.mse $ bxi' -^ bxi
 
 -- |Return how many times we have executed contraDiv

@@ -11,6 +11,7 @@ module Data.RBM(new
 
 import qualified System.Random as R
 import qualified Data.Matrix as M
+import Control.Monad(foldM)
 import Data.Matrix(Matrix(..)
                   ,(*^)
                   ,(+^)
@@ -32,15 +33,25 @@ new seed ni nh = M.randomish (ni, nh) (-0.01, 0.01) seed
 -- |Compute the energy of the RBM with the batch of input.
 energy :: (Monad m) => RBM -> (Matrix U B I) -> m Double
 energy rb bxi = do
-   bxh <- hiddenPs rb bxi
+   bxh <- hiddenPs rb bxi  
    ixb <- M.transpose bxi
    ixh <- ixb `M.mmult` bxh
    enr <- (M.sum $ rb *^ ixh)
    return $ negate enr
 
--- |Reconstruct the input
-reconstruct :: Monad m => Matrix U B I -> Matrix U I H -> m (Matrix U B I)
-reconstruct ins ixh = M.transpose =<< inputPs ixh =<< hiddenPs ixh ins
+-- |Run the RBM forward
+forward :: Monad m => Matrix U B I -> RBM -> m (Matrix U B I)
+forward bxi rbm = M.cast2 <$> hiddenPs rbm bxi 
+
+-- |Run the RBM backward
+backward :: Monad m => Matrix U B H -> RBM -> m (Matrix U B H)
+backward bxh rbm = M.cast2 <$> (M.transpose =<< inputPs rbm bxh)
+
+-- |Reconstruct the input by folding it forward over the stack of RBMs then backwards.
+reconstruct :: Monad m => Matrix U B I -> [RBM] -> m (Matrix U B I)
+reconstruct ins ixhs = do 
+   bxh <- M.cast2 <$> foldM forward ins ixhs
+   M.cast2 <$> foldM backward bxh ixhs 
 
 -- |Run Contrastive Divergance learning.  Return the updated RBM
 contraDiv :: (Monad m) => Double -> (Matrix U I H) -> Int -> Matrix U B I -> m (Matrix U I H)
@@ -58,8 +69,8 @@ contraDiv lc ixh seed bxi = do
 weightDiff :: Monad m => Int -> Matrix U I H -> Matrix U B I -> m (Matrix U I H)
 weightDiff seed ixh bxi = do
    let (s1:s2:_) = seeds seed
-   bxh <- sample s1 =<< hiddenPs ixh bxi
-   ixb' <- sample s2 =<< inputPs ixh bxh
+   bxh <- sample s1 =<< hiddenPs ixh bxi 
+   ixb' <- sample s2 =<< inputPs ixh bxh 
    ixb <- M.transpose bxi
    w1 <- ixb `M.mmult` bxh
    w2 <- ixb' `M.mmult` bxh
@@ -70,7 +81,7 @@ weightDiff seed ixh bxi = do
  - Given a biased input generate probabilities of the hidden layer
  - incuding the biased probability.
  --}
-hiddenPs :: (Monad m) => RBM -> (Matrix U B I) -> m (Matrix U B H)
+hiddenPs :: (Monad m) => RBM -> Matrix U B I -> m (Matrix U B H)
 hiddenPs ixh bxi = do
    !bxh <- bxi `M.mmult` ixh 
    let update v _ c | c == 0 = 1 -- ^ set bias output to 1
@@ -83,7 +94,7 @@ hiddenPs ixh bxi = do
  - Given a batch biased hidden sample generate probabilities of the input layer
  - incuding the biased probability.
  --}
-inputPs :: (Monad m) => (Matrix U I H) -> (Matrix U B H) -> m (Matrix U I B)
+inputPs :: (Monad m) => RBM -> Matrix U B H -> m (Matrix U I B)
 inputPs ixh bxh = do
    !ixb <- ixh `M.mmultT` bxh
    let update v r _ | r == 0 = 1 -- ^ set bias output to 1
