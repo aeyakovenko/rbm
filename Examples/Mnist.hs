@@ -212,46 +212,44 @@ genSample sname rbms = do
 mnist :: IO ()
 mnist = do 
    let name ix = "dist/train" ++ (show ix)
+       batchids = [0..468::Int]
        readBatch :: Int -> IO (Matrix U B I)
        readBatch ix = Matrix <$> readArray (name ix)
-       script lc batch = do
-         RS.contraDiv lc batch
-         cnt <- RS.count
-         when (0 == cnt `mod` 20) $ do
-            err <- RS.reconErr batch
-            lift $ putStrLn (show err)
-
-       train lc readb ix = do
+       train readb ix = do
             batch <- lift $ readb ix
-            small <- mapM M.d2u $ M.splitRows 10 batch
-            mapM_ (script lc) small
-
+            RS.contraDiv 0.001 batch
+            cnt <- RS.count
+            when (0 == cnt `mod` 20) $ do
+               err <- RS.reconErr batch
+               lift $ putStrLn (show err)
+               when (err < 0.05 || cnt > 1000) $ fail "done"
        r1 = RB.new 0 785 501
        r2 = RB.new 0 501 501
        r3 = RB.new 0 501 11
    
    --output without a trainining
-   (readBatch 0) >>= (printSamples 28 "dist/original.0.bmp")
+   bzero <- readBatch 0
+   printSamples 28 "dist/original.0.bmp" bzero
    genSample "dist/sample.0." [r1]
    w0 <- M.cast1 <$> M.transpose r1
    printSamples 28 "dist/weights.0.bmp" w0
 
    --train the first layer
-   tr1 <- snd <$> (RS.run r1 0 $ mapM_ (train 0.01 readBatch) [0..468::Int])
+   tr1 <- snd <$> (RS.run r1 0 $ mapM_ (train readBatch) batchids)
    genSample "dist/sample.1." [tr1]
    w1 <- M.cast1 <$> M.transpose tr1
    printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
    let read2 ix = M.cast2 <$> (RB.hiddenPs tr1 =<< readBatch ix)
-   tr2 <- snd <$> (RS.run r2 0 $ mapM_ (train 0.001 read2) [0..468::Int])
+   tr2 <- snd <$> (RS.run r2 0 $ mapM_ (train read2) batchids)
    genSample "dist/sample.2" [tr1,tr2]
    w2 <- M.cast1 <$> M.transpose tr2
    printSamples 28 "dist/weights.2.bmp" w2
 
    --train the third layer
    let read3 ix = M.cast2 <$> (RB.hiddenPs tr2 =<< read2 ix)
-   tr3 <- snd <$> (RS.run r3 0 $ mapM_ (train 0.001 read3) [0..468::Int])
+   tr3 <- snd <$> (RS.run r3 0 $ mapM_ (train read3) batchids)
    genSample "dist/sample.3" [tr1,tr2,tr3]
    w3 <- M.cast1 <$> M.transpose tr3
    printSamples 28 "dist/weights.3.bmp" w3

@@ -12,6 +12,7 @@ import Data.Matrix((-^))
 --utils
 import qualified System.Random as Rnd
 import Control.Monad.Identity(runIdentity)
+import Control.Monad(forever)
 
 --benchmark modules
 import Criterion.Main(defaultMainWith,defaultConfig,bgroup,bench,whnf)
@@ -40,9 +41,11 @@ prop_learn bs ni nh = runIdentity $ do
        toD = fromIntegral :: (Int -> Double)
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
+       train = do RS.finishIf 100 0.05 inputs
+                  RS.contraDiv 0.25 inputs
    erst <- fst <$> (RS.run rbm s3 $ RS.reconErr inputs)
-   lrb <-  snd <$> (RS.run rbm s3 $ RS.train 0.25 100 (0.05>) inputs)
-   recon <- R.reconstruct inputs lrb 
+   lrb <- snd <$> (RS.run rbm s3 $ forever train)
+   recon <- R.reconstruct inputs [lrb]
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err < erst || err < 0.5)
 
@@ -55,9 +58,11 @@ prop_not_learn bs ni nh = runIdentity $ do
        toD = fromIntegral :: (Int -> Double)
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
+       train = do RS.finishIf 100 0.05 inputs
+                  RS.contraDiv (-0.25) inputs
    erst <- fst <$> (RS.run rbm s3 $ RS.reconErr inputs)
-   lrb <- snd <$> (RS.run rbm s3 $ RS.train (-0.25) 100 (0.95<) inputs)
-   recon <- R.reconstruct inputs lrb 
+   lrb <- snd <$> (RS.run rbm s3 $ forever train)
+   recon <- R.reconstruct inputs [lrb]
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err >= erst || err >= 0.5)
 
