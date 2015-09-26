@@ -214,8 +214,8 @@ readBatch :: Int -> IO (Matrix U B I)
 readBatch ix = Matrix <$> readArray name
    where name = "dist/train" ++ (show ix)
 
-train :: (Matrix U B I -> IO (Matrix U B I)) -> RS.TrainT IO ()
-train gen = forever $ do
+train :: Double -> (Matrix U B I -> IO (Matrix U B I)) -> RS.TrainT IO ()
+train mine gen = forever $ do
   RS.setLearnRate 0.01
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
@@ -229,7 +229,7 @@ train gen = forever $ do
            liftIO $ print (cnt, err)
            when (err > 0.1) $ RS.setLearnRate 0.01
            when (err < 0.1) $ RS.setLearnRate 0.001
-           when (cnt > 10000 || err < 0.06) $ RS.finish_
+           when (cnt > 10000 || err < mine) $ RS.finish_
 
 mnist :: IO ()
 mnist = do 
@@ -245,19 +245,19 @@ mnist = do
    printSamples 28 "dist/weights.0.bmp" w0
 
    --train the first layer
-   tr1 <- snd <$> (RS.run r1 $ train return)
+   tr1 <- snd <$> (RS.run r1 $ train 0.1 return)
    genSample "dist/sample.1." [tr1]
    w1 <- M.cast1 <$> M.transpose tr1
    printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
    let read2 bb = M.cast2 <$> (RB.hiddenPs tr1 bb)
-   tr2 <- snd <$> (RS.run r2 $ train read2)
+   tr2 <- snd <$> (RS.run r2 $ train 0.01 read2)
    genSample "dist/sample.2." [tr1,tr2]
 
    --train the third layer
    let read3 bb = M.cast2 <$> (RB.hiddenPs tr2 =<< read2 bb)
-   tr3 <- snd <$> (RS.run r3 $ train read3)
+   tr3 <- snd <$> (RS.run r3 $ train 0.01 read3)
    genSample "dist/sample.3." [tr1,tr2,tr3]
 
 
