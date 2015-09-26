@@ -3,8 +3,8 @@ module Test.RBM(perf
                ) where
 
 --local
-import Data.RBM as R
-import Data.RBM.State as RS
+import qualified Data.RBM as R
+import qualified Data.RBM.State as RS
 import qualified Data.Matrix as M
 
 import Data.Matrix((-^))
@@ -34,30 +34,30 @@ sigmoid d = 1 / (1 + (exp (negate d)))
 -- |test to see if we can learn a random string
 prop_learn :: Word8 -> Word8 -> Word8 -> Bool
 prop_learn bs ni nh = runIdentity $ do
-   let rbm = new s1 (fi ni) (fi nh)
+   let rbm = R.new s1 (fi ni) (fi nh)
        (s1:s2:s3:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
        fi ww = 3 + (fromIntegral ww)
        toD = fromIntegral :: (Int -> Double)
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
-   erst <- fst <$> (RS.run rbm s3 $ reconErr inputs)
-   lrb <-  snd <$> (RS.run rbm s3 $ train 0.25 100 (0.05>) inputs)
-   recon <- reconstruct lrb inputs
+   erst <- fst <$> (RS.run rbm s3 $ RS.reconErr inputs)
+   lrb <-  snd <$> (RS.run rbm s3 $ RS.train 0.25 100 (0.05>) inputs)
+   recon <- R.reconstruct lrb inputs
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err < erst || err < 0.5)
 
 -- |test to see if we fail to rearn with a negative learning rate
 prop_not_learn :: Word8 -> Word8 -> Word8 -> Bool
 prop_not_learn bs ni nh = runIdentity $ do
-   let rbm = new s1 (fi ni) (fi nh) 
+   let rbm = R.new s1 (fi ni) (fi nh) 
        fi ww = 3 + (fromIntegral ww)
        (s1:s2:s3:_) = seeds $ (fi ni) * (fi nh) * (fi bs)
        toD = fromIntegral :: (Int -> Double)
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
-   erst <- fst <$> (RS.run rbm s3 $ reconErr inputs)
-   lrb <- snd <$> (RS.run rbm s3 $ train (-0.25) 100 (0.95<) inputs)
-   recon <- reconstruct lrb inputs
+   erst <- fst <$> (RS.run rbm s3 $ RS.reconErr inputs)
+   lrb <- snd <$> (RS.run rbm s3 $ RS.train (-0.25) 100 (0.95<) inputs)
+   recon <- R.reconstruct lrb inputs
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err >= erst || err >= 0.5)
 
@@ -65,17 +65,17 @@ prop_init :: Word8 -> Word8 -> Bool
 prop_init ni nh = (fi ni) * (fi nh)  == (M.elems rb)
    where
       seed = (fi ni) * (fi nh)
-      rb = new seed (fi ni) (fi nh)
+      rb = R.new seed (fi ni) (fi nh)
       fi :: Word8 -> Int
       fi ww = 1 + (fromIntegral ww)
 
 prop_hiddenProbs :: Word8 -> Word8 -> Bool
 prop_hiddenProbs ni nh = runIdentity $ do
-   let rb = new seed (fi ni) (fi nh)
+   let rb = R.new seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
        input = M.randomish (1, (fi ni)) (0,1) seed
        seed = (fi ni) * (fi nh)
-   pp <- hiddenPs rb input
+   pp <- R.hiddenPs rb input
    return $ (fi nh) == (M.col pp)
 
 prop_hiddenProbs2 :: Bool
@@ -88,16 +88,16 @@ prop_hiddenProbs2 = runIdentity $ do
        wws = [w00,w01,w02,w10,w11,w12]
        input = M.fromList (1,2) $ [i0,i1]
        rb = M.fromList (2,3) wws
-   pp <- M.toList <$> hiddenPs rb input
+   pp <- M.toList <$> R.hiddenPs rb input
    return $ pp == 1:(map sigmoid [h1, h2])
 
 prop_inputProbs :: Word8 -> Word8 -> Bool
 prop_inputProbs ni nh = runIdentity $ do
    let hidden = M.randomish (1,(fi nh)) (0,1) seed
-       rb = new seed (fi ni) (fi nh)
+       rb = R.new seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
        seed = (fi ni) * (fi nh)
-   pp <- inputPs rb hidden
+   pp <- R.inputPs rb hidden
    return $ (fi ni) == (M.row pp)
 
 prop_inputProbs2 :: Bool
@@ -111,17 +111,17 @@ prop_inputProbs2 = runIdentity $ do
        hiddens = M.fromList (1,2) [h0,h1]
        rb = M.fromList (2,3) $ wws
    rb' <- M.transpose rb
-   pp <- inputPs rb' hiddens
+   pp <- R.inputPs rb' hiddens
    pp' <- M.toList <$> M.transpose pp
    return $ pp' == 1:(map sigmoid [i1,i2])
 
 prop_energy :: Word8 -> Word8 -> Bool
 prop_energy ni nh = runIdentity $ do
    let input = M.randomish (1, (fi ni)) (0,1) seed
-       rb = new seed (fi ni) (fi nh)
+       rb = R.new seed (fi ni) (fi nh)
        fi ww = 1 + (fromIntegral ww)
        seed = (fi ni) * (fi nh)
-   ee <- energy rb input
+   ee <- R.energy rb input
    return $ not $ isNaN ee
 
 
