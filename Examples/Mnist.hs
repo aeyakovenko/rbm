@@ -206,7 +206,7 @@ genSample sname rbms = do
             let name = "dist/sample" ++ (show ix)
                 readSample = Matrix <$> (readArray name)
             bxi <- readSample
-            bxi' <- RB.reconstruct bxi rbms
+            bxi' <- RB.resample ix bxi rbms
             printSamples imagewidth sfile bxi'
    mapM_ regenSample [0..9::Int] 
 
@@ -216,18 +216,17 @@ readBatch ix = Matrix <$> readArray name
 
 train :: Double -> (Matrix U B I -> IO (Matrix U B I)) -> RS.TrainT IO ()
 train mine gen = forever $ do
-  RS.setLearnRate 0.01
+  RS.setLearnRate 0.005
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
      big <- liftIO $ gen =<< readBatch ix
-     small <- mapM M.d2u $ M.splitRows 5 big
+     small <- mapM M.d2u $ M.splitRows 1 big
      forM_ small $ \ batch -> do
         RS.contraDiv batch
         cnt <- RS.count
         when (0 == cnt `mod` 100) $ do
            err <- RS.reconErr big
            liftIO $ print (cnt, err)
-           when (err > 0.1) $ RS.setLearnRate 0.01
            when (err < 0.1) $ RS.setLearnRate 0.001
            when (cnt > 10000 || err < mine) $ RS.finish_
 
@@ -245,7 +244,7 @@ mnist = do
    printSamples 28 "dist/weights.0.bmp" w0
 
    --train the first layer
-   tr1 <- snd <$> (RS.run r1 $ train 0.1 return)
+   tr1 <- snd <$> (RS.run r1 $ train 0.05 return)
    genSample "dist/sample.1." [tr1]
    w1 <- M.cast1 <$> M.transpose tr1
    printSamples 28 "dist/weights.1.bmp" w1

@@ -7,6 +7,7 @@ module Data.RBM(new
                ,inputPs
                ,sample
                ,reconstruct
+               ,resample
                ) where
 
 import qualified System.Random as R
@@ -48,6 +49,16 @@ backward :: Monad m => Matrix U B H -> RBM -> m (Matrix U B H)
 backward bxh rbm = M.cast2 <$> (M.transpose =<< inputPs rbm bxh)
 
 -- |Reconstruct the input by folding it forward over the stack of RBMs then backwards.
+resample :: Monad m => Int -> Matrix U B I -> [RBM] -> m (Matrix U B I)
+resample seed ins ixhs = do 
+   let (s1:s2:_) = seeds seed
+   let back bxh ixh = sample s2 =<< backward bxh ixh 
+       forw bxi rbm = sample s1 =<< forward bxi rbm 
+   bxh <- M.cast2 <$> foldM forw ins ixhs
+   M.cast2 <$> foldM back bxh (reverse ixhs)
+
+
+-- |Reconstruct the input by folding it forward over the stack of RBMs then backwards.
 reconstruct :: Monad m => Matrix U B I -> [RBM] -> m (Matrix U B I)
 reconstruct ins ixhs = do 
    bxh <- M.cast2 <$> foldM forward ins ixhs
@@ -59,9 +70,8 @@ contraDiv lc ixh seed bxi = do
    !wd <- weightDiff seed ixh bxi
    !uave <- M.sum $ M.map abs wd
    !wave <- M.sum $ M.map abs ixh
-   let lc' = if wave > uave || uave == 0 
-             then lc 
-             else (wave / uave) * lc 
+   let lc' | uave == 0 = lc 
+           | otherwise = (wave / uave) * lc 
        wd' = M.map ((*) lc') wd
    M.d2u $ ixh +^ wd'
 {-# INLINE contraDiv #-}
@@ -84,8 +94,8 @@ weightDiff seed ixh bxi = do
 hiddenPs :: (Monad m) => RBM -> Matrix U B I -> m (Matrix U B H)
 hiddenPs ixh bxi = do
    !bxh <- bxi `M.mmult` ixh 
-   let update v _ c | c == 0 = 1 -- ^ set bias output to 1
-                    | otherwise = sigmoid v
+   let update _ _ 0 = 1 -- ^ set bias output to 1
+       update v _ _ = sigmoid v
    M.d2u $ M.traverse update bxh
 {-# INLINE hiddenPs #-}
 
@@ -97,8 +107,8 @@ hiddenPs ixh bxi = do
 inputPs :: (Monad m) => RBM -> Matrix U B H -> m (Matrix U I B)
 inputPs ixh bxh = do
    !ixb <- ixh `M.mmultT` bxh
-   let update v r _ | r == 0 = 1 -- ^ set bias output to 1
-                    | otherwise = sigmoid v
+   let update _ 0 _ = 1 -- ^ set bias output to 1
+       update v _ _ = sigmoid v
    M.d2u $ M.traverse update ixb
 {-# INLINE inputPs #-}
 

@@ -53,14 +53,15 @@ contraDiv :: (Monad m, E.MonadError a m, S.MonadState RBMS m)
 contraDiv bxi = do 
    (RBMS !ixh seed cnt lc) <- S.get 
    !uixh <- R.contraDiv lc ixh seed bxi
-   S.put (RBMS uixh (seed + 1) (cnt + 1) lc)
+   S.put (RBMS uixh (seed + 1) (cnt + (M.row bxi)) lc)
 
 -- |Compute the input reconstruction error with the current RBM in the state.
 reconErr :: (Monad m, E.MonadError a m, S.MonadState RBMS m) 
          => Matrix U B I -> m Double
 reconErr bxi = do
+   seed <- getSeed 
    rbms <- S.get
-   bxi' <- R.reconstruct bxi [(_rbm rbms)]
+   bxi' <- R.resample seed bxi [(_rbm rbms)]
    M.mse $ bxi' -^ bxi
 
 -- |Return how many times we have executed contraDiv
@@ -69,6 +70,12 @@ count :: (Monad m, E.MonadError a m, S.MonadState RBMS m)
 count = do
    rbms <- S.get 
    return $ _count rbms
+
+getSeed :: (Monad m, E.MonadError a m, S.MonadState RBMS m) 
+        => m Int
+getSeed = do
+   S.get >>= \ x -> S.put x { _seed = (_seed x) + 1 }
+   _seed <$> S.get
 
 setLearnRate :: (Monad m, E.MonadError a m, S.MonadState RBMS m) 
              => Double -> m ()
