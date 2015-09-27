@@ -69,9 +69,9 @@ contraDiv lc ixh seed bxi = do
 weightDiff :: Monad m => Int -> Matrix U I H -> Matrix U B I -> m (Matrix U I H)
 weightDiff seed ixh bxi = do
    let (s1:s2:_) = seeds seed
+   ixb <- M.transpose bxi
    bxh <- sample s1 =<< hiddenPs ixh bxi 
    ixb' <- sample s2 =<< inputPs ixh bxh 
-   ixb <- M.transpose bxi
    w1 <- ixb `M.mmult` bxh
    w2 <- ixb' `M.mmult` bxh
    M.d2u $ w1 -^ w2
