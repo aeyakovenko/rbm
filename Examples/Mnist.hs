@@ -256,6 +256,17 @@ trainBP mine = forever $ do
            liftIO $ print (cnt, err)
            when (cnt > 100000 || err < mine) $ T.finish_
 
+testBatch :: [Matrix U I H] -> Int -> IO ()
+testBatch nns ix = do
+   gen <- newStdGen
+   let name = "dist/test" ++ (show ix)
+   b <- Matrix <$> readArray name
+   bxh <- N.feedForward nns b
+   hxb <- M.transpose bxh
+   pv <- sampleProbs hxb
+   print (ix, R.toList pv)
+
+
 mnist :: IO ()
 mnist = do 
    let r1 = RB.new 0 785 501
