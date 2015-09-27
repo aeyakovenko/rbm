@@ -256,6 +256,15 @@ trainBP mine = forever $ do
            liftIO $ print (cnt, err)
            when (cnt > 100000 || err < mine) $ T.finish_
 
+sampleProbs :: Monad m => Matrix U H B -> m [Double]
+sampleProbs hxb = do 
+   total <- M.sum hxb
+   rows <- M.splitRows 1 hxb
+   let prob rr = do 
+      s <- (M.sum rr)
+      return $ s / total
+   mapM prob rows
+
 testBatch :: [Matrix U I H] -> Int -> IO ()
 testBatch nns ix = do
    gen <- newStdGen
@@ -264,8 +273,7 @@ testBatch nns ix = do
    bxh <- N.feedForward nns b
    hxb <- M.transpose bxh
    pv <- sampleProbs hxb
-   print (ix, R.toList pv)
-
+   print (ix, pv)
 
 mnist :: IO ()
 mnist = do 
@@ -299,7 +307,6 @@ mnist = do
    --backprop
    nns <- snd <$> (T.run [tr1,tr2,tr3] $ trainBP 0.005)
    genSample "dist/sample.3." nns
-
 
    mapM_ (testBatch nns) [0..9] 
 
