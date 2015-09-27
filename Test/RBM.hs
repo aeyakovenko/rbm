@@ -32,6 +32,13 @@ seeds seed = Rnd.randoms (Rnd.mkStdGen seed)
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 
+finishIf :: Monad m => Int -> Double -> Matrix U B I -> TrainT m ()
+finishIf n e b = do 
+   cnt <- getCount
+   when (n < cnt) RS.finish_
+   err <- reconErr b
+   when (e > err) RS.finish_
+
 -- |test to see if we can learn a random string
 prop_learn :: Word8 -> Word8 -> Word8 -> Bool
 prop_learn bs ni nh = runIdentity $ do

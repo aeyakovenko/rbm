@@ -59,9 +59,8 @@ contraDiv bxi = do
 reconErr :: (Monad m, E.MonadError a m, S.MonadState RBMS m) 
          => Matrix U B I -> m Double
 reconErr bxi = do
-   seed <- getSeed 
    rbms <- S.get
-   bxi' <- R.resample seed bxi [(_rbm rbms)]
+   bxi' <- R.reconstruct bxi [(_rbm rbms)]
    M.mse $ bxi' -^ bxi
 
 -- |Return how many times we have executed contraDiv
