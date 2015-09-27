@@ -33,9 +33,9 @@ finish_ :: (Monad m, E.MonadError () m, S.MonadState DNNS m)
        => m ()
 finish_ = finish ()
 
-run :: Monad m => Trainer m a -> m (a, R.RBM)
-run action = do
-   (a,dnns) <- S.runStateT (E.runExceptT action) (DNNS [] 0 0 0.001)
+run :: Monad m => [Matrix U I H] -> Trainer m a -> m (a, R.RBM)
+run nn action = do
+   (a,dnns) <- S.runStateT (E.runExceptT action) (DNNS nn 0 0 0.001)
    let unEither (Left v) = v
        unEither (Right v) = v
    return (unEither a, _nn dnns)
@@ -49,14 +49,13 @@ feedForward !bxi = do
 
 -- |Run Back Propagation training over the entire DNN.
 backProp :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
-         => Matrix U B I -> Matrix U B H -> m Double
+         => Matrix U B I -> Matrix U B H -> m ()
 backProp !bxi !bxh= do
    dnns <- S.get
    lr <- getLearnRate
    _ <- incCount
-   !(unn,err) <- N.backPropagate (_nn dnns) lr bxi bxh
+   !(unn,_) <- N.backPropagate (_nn dnns) lr bxi bxh
    S.put dnns { _nn  = unn }
-   return err
 
 -- |Run Constrastive Divergance on the last layer in the DNN
 contraDiv :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
@@ -69,21 +68,14 @@ contraDiv !bxi = do
    !uixh <- R.contraDiv lr ixh seed bxi
    pushLastLayer uixh
 
--- |Add the first layer to the DNN.
-initFirstLayer :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
-               => Int -> Int -> m ()
-initFirstLayer ni nh = do
-   s <- nextSeed
-   pushLastLayer $ R.new s ni nh
+-- |Run feedForward MLP algorithm over the entire DNN.
+forwardErr :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
+           => Matrix U B I -> Matrix U B H -> m Double
+forwardErr !bxi !bxh = do
+   nn <- getDNN
+   !bxh' <- N.feedForward nn bxi
+   M.mse $ bxh -^ bxh'
 
--- |Add a layer as the new output layer.
-addLayer :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
-         => Int -> m ()
-addLayer num = do
-   s <- nextSeed
-   dnns <- S.get
-   ixh <- getLastLayer
-   S.put $ dnns { _nn = (_nn dnns) ++ [R.new s (R.col ixh) num] }
 
 -- |Compute the input reconstruction error with the current RBM in the state.
 reconErr :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
@@ -148,7 +140,7 @@ pushLastLayer :: (Monad m, E.MonadError a m, S.MonadState DNNS m)
                 => (Matrix U I H) -> m ()
 pushLastLayer ixh = do
    v <- S.get
-   S.put v { _nn = reverse $ ixh:(tail $ reverse (_nn v)) }
+   S.put v { _nn = reverse $ ixh:(reverse (_nn v)) }
 
 -- |Get the next random seed.
 nextSeed :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 

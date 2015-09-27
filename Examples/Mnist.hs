@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Examples.Mnist (generateTrainBatches
+                      ,generateTrainLabels
                       ,generateTestBatches
                       ,readArray
                       ,generateBigTrainBatches
@@ -28,8 +29,7 @@ import Codec.Compression.GZip as GZ
 import Data.List.Split(chunksOf)
 import System.Random(newStdGen, randomRs)
 
-import qualified Data.RBM as RB
-import qualified Data.RBM.State as RS
+import qualified Data.DNN.Trainer as T
 import qualified Data.Matrix as M
 import Data.Matrix(Matrix(..)
                   ,U
@@ -53,24 +53,16 @@ toMatrix images = m
         len = length images
         pixels im = take maxsz $ 1:((normalisedData im) ++ [0..])
 
-{-
-toColumnVector :: Image -> Matrix Double
-toColumnVector i = (r><1) q :: Matrix Double
-  where r = Mnist.rows i * Mnist.columns i
-        p = map fromIntegral (pixels i)
-        q = map normalise p
--}
+toLabelM :: [Int] -> R.Array R.U R.DIM2 Double
+toLabelM labels = m
+  where 
+        m = R.fromListUnboxed (R.Z R.:. len R.:. 11) (concatMap pixels images)
+        maxsz = 11
+        len = length labels
+        pixels ll = take maxsz $ 1.0:(start ++ end)
+            where start = take (ll - 1) $ repeat 0.0
+                  end = 1.0 : repeat 0.0
 
-normalisedData :: Image -> [Double]
-normalisedData image = map normalisePixel (iPixels image)
-
---normalisedData :: Image -> [Double]
---normalisedData i = map (/m) x 
---    where x = map normalisePixel (pixels i)
---          m = sqrt( sum (zipWith (*) x x))
-
-normalisePixel :: Word8 -> Double
-normalisePixel p = (fromIntegral p) / 255.0
 
 -- MNIST label file format
 --
@@ -149,6 +141,14 @@ generateTrainBatches = do
       let name = "dist/train" ++ (show ix)
       writeArray name bb 
 
+generateTrainLabels :: IO ()
+generateTrainLabels = do
+   labels <- readLabels "dist/t10k-labels-idx1-ubyte.gz"
+   let batches = map toLabelM $ chunksOf 128 labels
+   (flip mapM_) (zip [0::Integer ..] batches) $ \ (ix, bb) -> do
+      let name = "dist/label" ++ (show ix)
+      writeArray name bb 
+
 generateTestBatches :: IO ()
 generateTestBatches = do
    images <- readImages "dist/t10k-images-idx3-ubyte.gz"
@@ -214,20 +214,47 @@ readBatch :: Int -> IO (Matrix U B I)
 readBatch ix = Matrix <$> readArray name
    where name = "dist/train" ++ (show ix)
 
-train :: Double -> (Matrix U B I -> IO (Matrix U B I)) -> RS.TrainT IO ()
-train mine gen = forever $ do
-  RS.setLearnRate 0.001
+readLabel :: Int -> IO (Matrix U B H)
+readLabel ix = Matrix <$> readArray name
+   where name = "dist/label" ++ (show ix)
+
+trainCD :: Double -> (Matrix U B I -> IO (Matrix U B I)) -> T.Trainer IO ()
+trainCD mine gen = forever $ do
+  T.setLearnRate 0.001
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
      big <- liftIO $ gen =<< readBatch ix
-     small <- mapM M.d2u $ M.splitRows 1 big
+     small <- mapM M.d2u $ M.splitRows 5 big
      forM_ small $ \ batch -> do
-        RS.contraDiv batch
-        cnt <- RS.count
+        T.contraDiv batch
+        cnt <- T.getCount
         when (0 == cnt `mod` 100) $ do
-           err <- RS.reconErr big
+           err <- T.reconErr big
            liftIO $ print (cnt, err)
            when (cnt > 100000 || err < mine) $ RS.finish_
+        when (0 == cnt `mod` 1000) $ do
+           nns <- T.getDNN
+           getSample ("dist/sampleCD." ++ (show cnt) ++ ".bmp") nns
+
+trainBP :: Double -> T.Trainer IO ()
+trainBP mine = forever $ do
+  T.setLearnRate 0.001
+  let batchids = [0..468::Int]
+  forM_ batchids $ \ ix -> do
+     bbatch <- liftIO $ readBatch ix
+     blabel <- liftIO $ readLabel ix
+     sbatch <- mapM M.d2u $ M.splitRows 5 bbatch
+     slabel <- mapM M.d2u $ M.splitRows 5 blabel
+     forM_ (zip sbatch,slabel) $ \ (batch,label) -> do
+        T.backProp batch label
+        cnt <- T.getCount
+        when (0 == cnt `mod` 1000) $ do
+           nns <- T.getDNN
+           getSample ("dist/sampleBP." ++ (show cnt) ++ ".bmp") nns
+        when (0 == cnt `mod` 100) $ do
+           err <- T.forwardErr bbatch blabel
+           liftIO $ print (cnt, err)
+           when (cnt > 100000 || err < mine) $ T.finish_
 
 mnist :: IO ()
 mnist = do 
@@ -243,33 +270,27 @@ mnist = do
    printSamples 28 "dist/weights.0.bmp" w0
 
    --train the first layer
-   tr1 <- snd <$> (RS.run r1 $ train 0.01 return)
+   [tr1] <- snd <$> (T.run [r1] $ trainCD 0.01 return)
    genSample "dist/sample.1." [tr1]
    w1 <- M.cast1 <$> M.transpose tr1
    printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
    let read2 bb = M.cast2 <$> (RB.hiddenPs tr1 bb)
-   tr2 <- snd <$> (RS.run r2 $ train 0.005 read2)
+   [tr2] <- snd <$> (T.run [r2] $ trainCD 0.005 read2)
    genSample "dist/sample.2." [tr1,tr2]
 
    --train the third layer
    let read3 bb = M.cast2 <$> (RB.hiddenPs tr2 =<< read2 bb)
-   tr3 <- snd <$> (RS.run r3 $ train 0.005 read3)
+   [tr3] <- snd <$> (T.run [r3] $ trainCD 0.005 read3)
    genSample "dist/sample.3." [tr1,tr2,tr3]
 
+   --backprop
+   nns <- snd <$> (T.run [tr1,tr2,tr3] $ trainBP 0.005)
+   genSample "dist/sample.3." nns
 
---   let nn = dd
---       name ix = "dist/bigtrain" ++ (show ix)
---       readBatch ix = M.Matrix <$> (readArray (name ix))
---       testVector :: Int -> [Double]
---       testVector ix = map fromIntegral $ take 10 $ (take (ix - 1) [0..]) ++ [1] ++ [0..]
---       learn nn ix = do
---         batch <- readBatch ix
---         let test = M.fromList (M.row batch, 10) $ concat $ replicate (M.row batch) (testVector ix)
---         NN.backProp nn 0.001 batch test
---   nn <- foldM learn nn [0..9]
---   mapM_ (testBatch nn) [0..9] 
+
+   mapM_ (testBatch nns) [0..9] 
 
 
 
