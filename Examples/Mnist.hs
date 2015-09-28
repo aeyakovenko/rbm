@@ -53,6 +53,9 @@ toMatrix images = m
         len = length images
         pixels im = take maxsz $ 1:((normalisedData im) ++ [0..])
 
+normalisedData :: Image -> [Double]
+normalisedData image = map normalisePixel (iPixels image)
+
 toLabelM :: [Int] -> R.Array R.U R.DIM2 Double
 toLabelM labels = m
   where 
