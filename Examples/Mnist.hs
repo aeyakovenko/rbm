@@ -14,7 +14,7 @@ module Examples.Mnist (generateTrainBatches
 import Control.Monad.Trans(liftIO)
 import Control.Monad(when,forever,forM_)
 import qualified Data.ByteString.Lazy as BL
-import Data.Binary.Get
+import Data.Binary.Get hiding(label)
 import qualified Data.Binary as B
 import Data.Word
 import qualified Data.List.Split as S
@@ -30,11 +30,14 @@ import Data.List.Split(chunksOf)
 import System.Random(newStdGen, randomRs)
 
 import qualified Data.DNN.Trainer as T
+import qualified Data.NN as N
+import qualified Data.RBM as RB
 import qualified Data.Matrix as M
 import Data.Matrix(Matrix(..)
                   ,U
                   ,B
                   ,I
+                  ,H
                   )
 
 
@@ -56,13 +59,16 @@ toMatrix images = m
 normalisedData :: Image -> [Double]
 normalisedData image = map normalisePixel (iPixels image)
 
+normalisePixel :: Word8 -> Double
+normalisePixel p = (fromIntegral p) / 255.0
+
 toLabelM :: [Int] -> R.Array R.U R.DIM2 Double
 toLabelM labels = m
   where 
-        m = R.fromListUnboxed (R.Z R.:. len R.:. 11) (concatMap pixels images)
+        m = R.fromListUnboxed (R.Z R.:. len R.:. 11) (concatMap vectors labels)
         maxsz = 11
         len = length labels
-        pixels ll = take maxsz $ 1.0:(start ++ end)
+        vectors ll = take maxsz $ 1.0:(start ++ end)
             where start = take (ll - 1) $ repeat 0.0
                   end = 1.0 : repeat 0.0
 
@@ -200,7 +206,7 @@ printSamples imagewidth sfile (Matrix bxi) = do
    putStrLn $ concat ["generating image: ", sfile]
    R.writeImageToBMP sfile strip
 
-genSample:: String -> [RB.RBM] -> IO ()
+genSample:: String -> [Matrix U I H] -> IO ()
 genSample sname rbms = do
    let imagewidth = 28
        regenSample :: Int -> IO ()
@@ -234,10 +240,10 @@ trainCD mine = forever $ do
         when (0 == cnt `mod` 100) $ do
            err <- T.reconErr big
            liftIO $ print (cnt, err)
-           when (cnt > 100000 || err < mine) $ RS.finish_
+           when (cnt > 100000 || err < mine) $ T.finish_
         when (0 == cnt `mod` 1000) $ do
            nns <- T.getDNN
-           getSample ("dist/sampleCD." ++ (show cnt) ++ ".bmp") nns
+           liftIO $ genSample ("dist/sampleCD." ++ (show cnt) ++ ".bmp") nns
 
 trainBP :: Double -> T.Trainer IO ()
 trainBP mine = forever $ do
@@ -248,12 +254,12 @@ trainBP mine = forever $ do
      blabel <- liftIO $ readLabel ix
      sbatch <- mapM M.d2u $ M.splitRows 5 bbatch
      slabel <- mapM M.d2u $ M.splitRows 5 blabel
-     forM_ (zip sbatch,slabel) $ \ (batch,label) -> do
+     forM_ (zip sbatch slabel) $ \ (batch,label) -> do
         T.backProp batch label
         cnt <- T.getCount
         when (0 == cnt `mod` 1000) $ do
            nns <- T.getDNN
-           getSample ("dist/sampleBP." ++ (show cnt) ++ ".bmp") nns
+           liftIO $ genSample ("dist/sampleBP." ++ (show cnt) ++ ".bmp") nns
         when (0 == cnt `mod` 100) $ do
            err <- T.forwardErr bbatch blabel
            liftIO $ print (cnt, err)
@@ -262,13 +268,12 @@ trainBP mine = forever $ do
 sampleProbs :: Monad m => Matrix U H B -> m [Double]
 sampleProbs hxb = do 
    total <- M.sum hxb
-   rows <- M.splitRows 1 hxb
+   let rrs = M.splitRows 1 hxb
    let prob rr = (/total) <$> (M.sum rr)
-   mapM prob rows
+   mapM prob rrs
 
 testBatch :: [Matrix U I H] -> Int -> IO ()
 testBatch nns ix = do
-   gen <- newStdGen
    let name = "dist/test" ++ (show ix)
    b <- Matrix <$> readArray name
    bxh <- N.feedForward nns b
