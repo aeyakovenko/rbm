@@ -3,7 +3,7 @@
 module Data.DNN.Trainer where
 
 import qualified Data.RBM as R
-import qualified Data.NN as N
+import qualified Data.MLP as P
 import qualified Control.Monad.State.Strict as S
 import qualified Control.Monad.Except as E
 import qualified Data.Matrix as M
@@ -16,7 +16,8 @@ import Data.Matrix(Matrix(..)
                   ,B
                   )
 
-data DNNS = DNNS { _nn :: [Matrix U I H]
+type DNN = [Matrix U I H]
+data DNNS = DNNS { _nn :: DNN
                  , _seed :: Int
                  , _count :: Int
                  , _lr :: Double
@@ -32,7 +33,8 @@ finish_ :: (Monad m, E.MonadError () m, S.MonadState DNNS m)
         => m ()
 finish_ = finish ()
 
-run :: Monad m => [Matrix U I H] -> Trainer m a -> m (a, [Matrix U I H])
+-- |Run the script over the DNN.
+run :: Monad m => DNN -> Trainer m a -> m (a, DNN)
 run nn action = do
    (a,dnns) <- S.runStateT (E.runExceptT action) (DNNS nn 0 0 0.001)
    let unEither (Left v) = v
@@ -44,7 +46,7 @@ feedForward :: (Monad m, E.MonadError a m, S.MonadState DNNS m)
             => Matrix U B I -> m (Matrix U B H)
 feedForward !bxi = do
    nn <- getDNN
-   N.feedForward nn bxi
+   P.feedForward nn bxi
 
 -- |Run Back Propagation training over the entire DNN.
 backProp :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
@@ -53,7 +55,7 @@ backProp !bxi !bxh= do
    dnns <- S.get
    lr <- getLearnRate
    _ <- incCount
-   !(unn,_) <- N.backPropagate (_nn dnns) lr bxi bxh
+   !(unn,_) <- P.backPropagate (_nn dnns) lr bxi bxh
    S.put dnns { _nn  = unn }
 
 -- |Run Constrastive Divergance on the last layer in the DNN
@@ -76,7 +78,7 @@ forwardErr :: (Monad m, E.MonadError a m, S.MonadState DNNS m)
            => Matrix U B I -> Matrix U B H -> m Double
 forwardErr !bxi !bxh = do
    nn <- getDNN
-   !bxh' <- N.feedForward nn bxi
+   !bxh' <- P.feedForward nn bxi
    M.mse $ bxh -^ bxh'
 
 -- |Compute the input reconstruction error with the current RBM in the state.
@@ -140,7 +142,7 @@ popLastLayer = do
 
 -- |Push the updated layer as the last in the DNN.
 pushLastLayer :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
-                => (Matrix U I H) -> m ()
+              => Matrix U I H -> m ()
 pushLastLayer ixh = do
    v <- S.get
    S.put v { _nn = reverse $ ixh:(reverse (_nn v)) }

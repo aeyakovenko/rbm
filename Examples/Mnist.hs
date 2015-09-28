@@ -30,7 +30,7 @@ import Data.List.Split(chunksOf)
 import System.Random(newStdGen, randomRs)
 
 import qualified Data.DNN.Trainer as T
-import qualified Data.NN as N
+import qualified Data.MLP as P
 import qualified Data.RBM as RB
 import qualified Data.Matrix as M
 import Data.Matrix(Matrix(..)
@@ -276,7 +276,7 @@ testBatch :: [Matrix U I H] -> Int -> IO ()
 testBatch nns ix = do
    let name = "dist/test" ++ (show ix)
    b <- Matrix <$> readArray name
-   bxh <- N.feedForward nns b
+   bxh <- P.feedForward nns b
    hxb <- M.transpose bxh
    pv <- sampleProbs hxb
    print (ix, pv)

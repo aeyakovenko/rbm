@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Data.NN where
+module Data.MLP where
  
 import qualified Data.Matrix as M
 import Control.Monad(foldM)
@@ -14,14 +14,14 @@ import Data.Matrix(Matrix(..)
                   ,H
                   )
 
-type NN = [Matrix U I H]
+type MLP = [Matrix U I H]
 
-feedForward :: Monad m => NN -> Matrix U B I -> m (Matrix U B H)
+feedForward :: Monad m => MLP -> Matrix U B I -> m (Matrix U B H)
 feedForward nn ins = M.cast2 <$> foldM feed ins nn
    where feed a b = M.cast2 <$> feedForward1 a b
 {-# INLINE feedForward #-}
 
-backPropagate :: Monad m => NN -> Double -> Matrix U B I -> Matrix U B H -> m (NN, Double)
+backPropagate :: Monad m => MLP -> Double -> Matrix U B I -> Matrix U B H -> m (MLP, Double)
 backPropagate nn lc ins tbj = do
    outs <- scanForward ins nn
    let routs = map M.cast2 $ reverse outs
@@ -74,7 +74,7 @@ backPropHidden ebj (obi,wij) = do
    M.d2u $ dbi *^ (M.cast2 ebj')
 {-# INLINE backPropHidden #-}
 
-scanForward :: Monad m => Matrix U B I -> NN -> m ([Matrix U B H])
+scanForward :: Monad m => Matrix U B I -> MLP -> m ([Matrix U B H])
 scanForward ins nns = (map M.cast2) <$> scanM feed ins nns
    where feed ii nn = M.cast2 <$> feedForward1 ii nn
 {-# INLINE scanForward #-}
