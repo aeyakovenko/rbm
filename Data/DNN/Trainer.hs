@@ -7,7 +7,7 @@ import qualified Data.NN as N
 import qualified Control.Monad.State.Strict as S
 import qualified Control.Monad.Except as E
 import qualified Data.Matrix as M
-import Control.Monad(when) 
+import Control.Monad(foldM) 
 import Data.Matrix(Matrix(..)
                   ,(-^)
                   ,U
@@ -17,7 +17,6 @@ import Data.Matrix(Matrix(..)
                   )
 
 data DNNS = DNNS { _nn :: [Matrix U I H]
-                 , _layer :: Int
                  , _seed :: Int
                  , _count :: Int
                  , _lr :: Double
@@ -30,10 +29,10 @@ finish :: (Monad m, E.MonadError a m, S.MonadState DNNS m)
 finish v = E.throwError v
 
 finish_ :: (Monad m, E.MonadError () m, S.MonadState DNNS m) 
-       => m ()
+        => m ()
 finish_ = finish ()
 
-run :: Monad m => [Matrix U I H] -> Trainer m a -> m (a, R.RBM)
+run :: Monad m => [Matrix U I H] -> Trainer m a -> m (a, [Matrix U I H])
 run nn action = do
    (a,dnns) <- S.runStateT (E.runExceptT action) (DNNS nn 0 0 0.001)
    let unEither (Left v) = v
@@ -58,14 +57,18 @@ backProp !bxi !bxh= do
    S.put dnns { _nn  = unn }
 
 -- |Run Constrastive Divergance on the last layer in the DNN
+-- |This will first run the input through the layers to generate
+-- |the probability vector as the input for the last layer.
 contraDiv :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
           => Matrix U B I -> m ()
 contraDiv !bxi = do 
    seed <- nextSeed
-   cnt <- incCount
+   _ <- incCount
    lr <- getLearnRate
    ixh <- popLastLayer
-   !uixh <- R.contraDiv lr ixh seed bxi
+   nns <- getDNN
+   bxi' <- foldM R.forward bxi nns
+   !uixh <- R.contraDiv lr ixh seed bxi'
    pushLastLayer uixh
 
 -- |Run feedForward MLP algorithm over the entire DNN.
@@ -75,7 +78,6 @@ forwardErr !bxi !bxh = do
    nn <- getDNN
    !bxh' <- N.feedForward nn bxi
    M.mse $ bxh -^ bxh'
-
 
 -- |Compute the input reconstruction error with the current RBM in the state.
 reconErr :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
@@ -88,21 +90,22 @@ reconErr bxi = do
 reconstruct :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
             => Matrix U B I -> m (Matrix U B I)
 reconstruct bxi = do
-   dnns <- S.get
-   R.reconstruct bxi (_nn dnns)
+   dnn <- getDNN
+   R.reconstruct bxi dnn
 
 -- |Resample the input with the current RBM
 resample :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
          => Matrix U B I -> m (Matrix U B I)
 resample bxi = do
-   dnns <- S.get
-   R.resample bxi (_nn dnns)
+   dnn <- getDNN
+   seed <- nextSeed
+   R.resample seed bxi dnn
 
 -- |Return how many times we have executed contraDiv or backProp
 getCount :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
       => m Int
 getCount = do
-   dnns <- S.get 
+   dnns <- S.get
    return $ _count dnns
 
 -- |Set the count to a specific value.
@@ -131,7 +134,7 @@ popLastLayer = do
    v <- S.get
    let check [] = error "Data.DNN.Trainer.popLastLayer: empty dnn, call initFirstLayer first."
        check ls = ls
-       (rest,l) = splitAt ((length ls) -1) $ check (_nn v)
+       (rest,l) = splitAt ((length (_nn v))-1) $ check (_nn v)
    S.put v { _nn = rest }
    return $ head $ check l
 
@@ -155,6 +158,6 @@ setLearnRate :: (Monad m, E.MonadError a m, S.MonadState DNNS m)
 setLearnRate d = S.get >>= \ x -> S.put x { _lr = d }
 
 -- |Get the current learning rate.
-getLearnRate :: (Monad m, E.MonadError a m, S.MonadState RBMS m) 
+getLearnRate :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
              => m Double
 getLearnRate = _lr <$> S.get 

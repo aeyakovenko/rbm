@@ -8,6 +8,8 @@ module Data.RBM(new
                ,sample
                ,reconstruct
                ,resample
+               ,forward
+               ,backward
                ) where
 
 import qualified System.Random as R

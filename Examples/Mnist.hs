@@ -218,12 +218,12 @@ readLabel :: Int -> IO (Matrix U B H)
 readLabel ix = Matrix <$> readArray name
    where name = "dist/label" ++ (show ix)
 
-trainCD :: Double -> (Matrix U B I -> IO (Matrix U B I)) -> T.Trainer IO ()
-trainCD mine gen = forever $ do
+trainCD :: Double ->  T.Trainer IO ()
+trainCD mine = forever $ do
   T.setLearnRate 0.001
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
-     big <- liftIO $ gen =<< readBatch ix
+     big <- liftIO $ readBatch ix
      small <- mapM M.d2u $ M.splitRows 5 big
      forM_ small $ \ batch -> do
         T.contraDiv batch
@@ -260,9 +260,7 @@ sampleProbs :: Monad m => Matrix U H B -> m [Double]
 sampleProbs hxb = do 
    total <- M.sum hxb
    rows <- M.splitRows 1 hxb
-   let prob rr = do 
-      s <- (M.sum rr)
-      return $ s / total
+   let prob rr = (/total) <$> (M.sum rr)
    mapM prob rows
 
 testBatch :: [Matrix U I H] -> Int -> IO ()
@@ -289,19 +287,17 @@ mnist = do
    printSamples 28 "dist/weights.0.bmp" w0
 
    --train the first layer
-   [tr1] <- snd <$> (T.run [r1] $ trainCD 0.01 return)
+   [tr1] <- snd <$> (T.run [r1] $ trainCD 0.01)
    genSample "dist/sample.1." [tr1]
    w1 <- M.cast1 <$> M.transpose tr1
    printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
-   let read2 bb = M.cast2 <$> (RB.hiddenPs tr1 bb)
-   [tr2] <- snd <$> (T.run [r2] $ trainCD 0.005 read2)
+   [tr2] <- snd <$> (T.run [r2] $ trainCD 0.005)
    genSample "dist/sample.2." [tr1,tr2]
 
    --train the third layer
-   let read3 bb = M.cast2 <$> (RB.hiddenPs tr2 =<< read2 bb)
-   [tr3] <- snd <$> (T.run [r3] $ trainCD 0.005 read3)
+   [tr3] <- snd <$> (T.run [r3] $ trainCD 0.005)
    genSample "dist/sample.3." [tr1,tr2,tr3]
 
    --backprop
