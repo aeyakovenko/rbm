@@ -52,11 +52,11 @@ feedForward !bxi = do
 backProp :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
          => Matrix U B I -> Matrix U B H -> m ()
 backProp !bxi !bxh= do
-   dnns <- S.get
-   lr <- getLearnRate
    _ <- incCount
-   !(unn,_) <- P.backPropagate (_nn dnns) lr bxi bxh
-   S.put dnns { _nn  = unn }
+   lr <- getLearnRate
+   dnn <- getDNN
+   !(unn,_) <- P.backPropagate dnn lr bxi bxh
+   putDNN unn
 
 -- |Run Constrastive Divergance on the last layer in the DNN
 -- |This will first run the input through the layers to generate
@@ -123,6 +123,12 @@ incCount = do
    v <- S.get
    S.put v { _count = (_count v) + 1 }
    return $ _count v
+
+-- |Set the DNN
+putDNN :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
+        => [Matrix U I H] -> m ()
+putDNN nn = S.get >>= \ x -> S.put x { _nn = nn }
+
 
 -- |Return the DNN
 getDNN :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 

@@ -7,12 +7,16 @@ import qualified Data.RBM as R
 import qualified Data.DNN.Trainer as T
 import qualified Data.Matrix as M
 
-import Data.Matrix((-^))
+import Data.Matrix((-^),
+                   Matrix(..),
+                   U,
+                   B,
+                   I)
 
 --utils
 import qualified System.Random as Rnd
 import Control.Monad.Identity(runIdentity)
-import Control.Monad(forever)
+import Control.Monad(forever,when)
 
 --benchmark modules
 import Criterion.Main(defaultMainWith,defaultConfig,bgroup,bench,whnf)
@@ -32,11 +36,11 @@ seeds seed = Rnd.randoms (Rnd.mkStdGen seed)
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 
-finishIf :: Monad m => Int -> Double -> Matrix U B I -> Trainer m ()
+finishIf :: Monad m => Int -> Double -> Matrix U B I -> T.Trainer m ()
 finishIf n e b = do 
-   cnt <- getCount
+   cnt <- T.getCount
    when (n < cnt) T.finish_
-   err <- reconErr b
+   err <- T.reconErr b
    when (e > err) T.finish_
 
 -- |test to see if we can learn a random string
@@ -49,11 +53,11 @@ prop_learn bs ni nh = runIdentity $ do
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
        train = do T.setLearnRate 0.25
-                  T.finishIf 100 0.05 inputs
+                  finishIf 100 0.05 inputs
                   T.contraDiv inputs
-   erst <- fst <$> (T.run rbm $ T.reconErr inputs)
-   lrb <- snd <$> (T.run rbm $ forever train)
-   recon <- R.reconstruct inputs [lrb]
+   erst <- fst <$> (T.run [rbm] $ T.reconErr inputs)
+   lrb <- snd <$> (T.run [rbm] $ forever train)
+   recon <- R.reconstruct inputs lrb
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err < erst || err < 0.5)
 
@@ -67,11 +71,11 @@ prop_not_learn bs ni nh = runIdentity $ do
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
        train = do T.setLearnRate (-0.25)
-                  T.finishIf 100 0.05 inputs
+                  finishIf 100 0.05 inputs
                   T.contraDiv inputs
-   erst <- fst <$> (T.run rbm $ T.reconErr inputs)
-   lrb <- snd <$> (T.run rbm $ forever train)
-   recon <- R.reconstruct inputs [lrb]
+   erst <- fst <$> (T.run [rbm] $ T.reconErr inputs)
+   lrb <- snd <$> (T.run [rbm] $ forever train)
+   recon <- R.reconstruct inputs lrb
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err >= erst || err >= 0.5)
 

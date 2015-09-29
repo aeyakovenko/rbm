@@ -308,6 +308,8 @@ mnist = do
    [tr3] <- snd <$> (T.run [r3] $ trainCD 0.0001)
    genSample "dist/sample.3" [tr1,tr2,tr3]
 
+   mapM_ (testBatch [tr1,tr2,tr3]) [0..9] 
+
    --backprop
    nns <- snd <$> (T.run [tr1,tr2,tr3] $ trainBP 0.001)
    genSample "dist/sample.3" nns

@@ -29,12 +29,12 @@ backPropagate nn lc ins tbj = do
    let result = head routs
 
    --output layer backprop
-   errm <- M.d2u $ result -^ tbj
-   pbj <- backPropOutput result errm
+   !errm <- M.d2u $ result -^ tbj
+   !pbj <- backPropOutput result errm
 
    --hiddel layer backprop results
-   let back pb ons = M.cast2 <$> backPropHidden pb ons
-   pbjs <- scanM back pbj (zip (tail routs) rnn)
+   let back !pb !ons = M.cast2 <$> backPropHidden pb ons
+   !pbjs <- scanM back pbj (zip (tail routs) rnn)
 
    --apply the backprops
    let fpbjs = reverse pbjs
@@ -46,20 +46,21 @@ backPropagate nn lc ins tbj = do
 
 -- |apply backprop to the hidden nodes
 applyBackPropH :: Monad m => Double -> (Matrix U I H, Matrix U B H, Matrix U B I) -> m (Matrix U I H)
-applyBackPropH lc (wij,pbj,obi) = do
+applyBackPropH lc !(wij,pbj,obi) = do
    oib <- M.transpose obi
    lij <- oib `M.mmult` pbj
    let sz :: Double = 1.0 / (fromIntegral $ M.elems wij)
 
    --calculate the average weight and average update
-   wave <- ((*) sz) <$> (M.sum $ M.map abs wij)
-   uave <- ((*) sz) <$> (M.sum $ M.map abs lij)
+   !wave <- ((*) sz) <$> (M.sum $ M.map abs wij)
+   !uave <- ((*) sz) <$> (M.sum $ M.map abs lij)
    --scale the updates to the learning rate
    let lc' = if wave > uave || uave == 0 
                then lc 
                else (wave / uave) * lc 
    let uij = M.map ((*) (negate lc')) lij
-   M.d2u $ wij +^ uij
+   !uw <- M.d2u $ wij +^ uij
+   return uw
 {-# INLINE applyBackPropH #-}
 
 backPropOutput :: Monad m => Matrix U B H -> Matrix U B H -> m (Matrix U B H)
