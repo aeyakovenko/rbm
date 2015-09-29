@@ -4,7 +4,7 @@ module Test.RBM(perf
 
 --local
 import qualified Data.RBM as R
-import qualified Data.RBM.State as RS
+import qualified Data.DNN.Trainer as T
 import qualified Data.Matrix as M
 
 import Data.Matrix((-^))
@@ -32,12 +32,12 @@ seeds seed = Rnd.randoms (Rnd.mkStdGen seed)
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 
-finishIf :: Monad m => Int -> Double -> Matrix U B I -> TrainT m ()
+finishIf :: Monad m => Int -> Double -> Matrix U B I -> Trainer m ()
 finishIf n e b = do 
    cnt <- getCount
-   when (n < cnt) RS.finish_
+   when (n < cnt) T.finish_
    err <- reconErr b
-   when (e > err) RS.finish_
+   when (e > err) T.finish_
 
 -- |test to see if we can learn a random string
 prop_learn :: Word8 -> Word8 -> Word8 -> Bool
@@ -48,11 +48,11 @@ prop_learn bs ni nh = runIdentity $ do
        toD = fromIntegral :: (Int -> Double)
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
-       train = do RS.setLearnRate 0.25
-                  RS.finishIf 100 0.05 inputs
-                  RS.contraDiv inputs
-   erst <- fst <$> (RS.run rbm $ RS.reconErr inputs)
-   lrb <- snd <$> (RS.run rbm $ forever train)
+       train = do T.setLearnRate 0.25
+                  T.finishIf 100 0.05 inputs
+                  T.contraDiv inputs
+   erst <- fst <$> (T.run rbm $ T.reconErr inputs)
+   lrb <- snd <$> (T.run rbm $ forever train)
    recon <- R.reconstruct inputs [lrb]
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err < erst || err < 0.5)
@@ -66,11 +66,11 @@ prop_not_learn bs ni nh = runIdentity $ do
        toD = fromIntegral :: (Int -> Double)
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
-       train = do RS.setLearnRate (-0.25)
-                  RS.finishIf 100 0.05 inputs
-                  RS.contraDiv inputs
-   erst <- fst <$> (RS.run rbm $ RS.reconErr inputs)
-   lrb <- snd <$> (RS.run rbm $ forever train)
+       train = do T.setLearnRate (-0.25)
+                  T.finishIf 100 0.05 inputs
+                  T.contraDiv inputs
+   erst <- fst <$> (T.run rbm $ T.reconErr inputs)
+   lrb <- snd <$> (T.run rbm $ forever train)
    recon <- R.reconstruct inputs [lrb]
    err <- traceShowId <$> M.mse (inputs -^ recon)
    return $ (err >= erst || err >= 0.5)

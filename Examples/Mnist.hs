@@ -152,7 +152,7 @@ generateTrainBatches = do
 
 generateTrainLabels :: IO ()
 generateTrainLabels = do
-   labels <- readLabels "dist/t10k-labels-idx1-ubyte.gz"
+   labels <- readLabels "dist/train-labels-idx1-ubyte.gz"
    let batches = map toLabelM $ chunksOf 128 labels
    (flip mapM_) (zip [0::Integer ..] batches) $ \ (ix, bb) -> do
       let name = "dist/label" ++ (show ix)
@@ -211,7 +211,7 @@ genSample sname rbms = do
    let imagewidth = 28
        regenSample :: Int -> IO ()
        regenSample ix = do
-            let sfile = concat [sname, (show ix), ".bmp"]
+            let sfile = concat [sname, ".", (show ix), ".bmp"]
             let name = "dist/sample" ++ (show ix)
                 readSample = Matrix <$> (readArray name)
             bxi <- readSample
@@ -240,10 +240,10 @@ trainCD mine = forever $ do
         when (0 == cnt `mod` 100) $ do
            err <- T.reconErr big
            liftIO $ print (cnt, err)
-           when (cnt > 100000 || err < mine) $ T.finish_
+           when (cnt > 500 || err < mine) $ T.finish_
         when (0 == cnt `mod` 1000) $ do
            nns <- T.getDNN
-           liftIO $ genSample ("dist/sampleCD." ++ (show cnt) ++ ".bmp") nns
+           liftIO $ genSample ("dist/sampleCD." ++ (show cnt)) nns
 
 trainBP :: Double -> T.Trainer IO ()
 trainBP mine = forever $ do
@@ -259,11 +259,11 @@ trainBP mine = forever $ do
         cnt <- T.getCount
         when (0 == cnt `mod` 1000) $ do
            nns <- T.getDNN
-           liftIO $ genSample ("dist/sampleBP." ++ (show cnt) ++ ".bmp") nns
+           liftIO $ genSample ("dist/sampleBP." ++ (show cnt)) nns
         when (0 == cnt `mod` 100) $ do
            err <- T.forwardErr bbatch blabel
            liftIO $ print (cnt, err)
-           when (cnt > 100000 || err < mine) $ T.finish_
+           when (cnt > 500 || err < mine) $ T.finish_
 
 sampleProbs :: Monad m => Matrix U H B -> m [Double]
 sampleProbs hxb = do 
@@ -290,27 +290,27 @@ mnist = do
    --output without a trainining
    bzero <- readBatch 0
    printSamples 28 "dist/original.0.bmp" bzero
-   genSample "dist/sample.0." [r1]
+   genSample "dist/sample.0" [r1]
    w0 <- M.cast1 <$> M.transpose r1
    printSamples 28 "dist/weights.0.bmp" w0
 
    --train the first layer
    [tr1] <- snd <$> (T.run [r1] $ trainCD 0.01)
-   genSample "dist/sample.1." [tr1]
+   genSample "dist/sample.1" [tr1]
    w1 <- M.cast1 <$> M.transpose tr1
    printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
-   [tr2] <- snd <$> (T.run [r2] $ trainCD 0.005)
-   genSample "dist/sample.2." [tr1,tr2]
+   [tr2] <- snd <$> (T.run [r2] $ trainCD 0.0001)
+   genSample "dist/sample.2" [tr1,tr2]
 
    --train the third layer
-   [tr3] <- snd <$> (T.run [r3] $ trainCD 0.005)
-   genSample "dist/sample.3." [tr1,tr2,tr3]
+   [tr3] <- snd <$> (T.run [r3] $ trainCD 0.0001)
+   genSample "dist/sample.3" [tr1,tr2,tr3]
 
    --backprop
-   nns <- snd <$> (T.run [tr1,tr2,tr3] $ trainBP 0.005)
-   genSample "dist/sample.3." nns
+   nns <- snd <$> (T.run [tr1,tr2,tr3] $ trainBP 0.001)
+   genSample "dist/sample.3" nns
 
    mapM_ (testBatch nns) [0..9] 
 

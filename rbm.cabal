@@ -7,7 +7,6 @@ Cabal-Version:       >=1.2
 
 Library
   exposed-modules:   Data.RBM,
-                     Data.RBM.State,
                      Data.DNN.Trainer,
                      Data.NN,
                      Data.Matrix
@@ -52,6 +51,10 @@ Executable mnist
                      zlib,
                      transformers,
                      binary
+
+Executable generatetrainlabels
+    main-is:         Examples/Mnist.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.generateTrainLabels
 
 ----mnist data generation
 --Executable trainbatches

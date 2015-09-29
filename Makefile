@@ -1,9 +1,9 @@
 cabal_files=rbm.cabal
 
 hs_files=Data/RBM.hs\
-			Data/NN.hs\
+			Data/MLP.hs\
 			Data/Matrix.hs\
-			Data/DBN.hs\
+			Data/DNN/Trainer.hs\
 			Examples/Mnist.hs
 
 tix_files=perf-RBM.tix\
@@ -12,10 +12,11 @@ tix_files=perf-RBM.tix\
 			 mnist.tix\
 			 test-RBM.tix\
 			 bigtrainbatches.tix\
+			 generatetrainlabels.tix\
 			 console.tix
 
-all:mnist
-#all:dist/cabal.test.ok dist/cabal.build.ok
+#all:mnist
+all:dist/cabal.test.ok dist/cabal.build.ok
 
 dist/cabal.test.ok:$(hs_files) dist/setup-config tix
 	cabal test 2>&1
