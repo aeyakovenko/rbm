@@ -26,7 +26,7 @@ data DNNS = DNNS { _nn :: DNN
 type Trainer m a = E.ExceptT a (S.StateT DNNS m) a
 
 finish :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
-       => a -> m a
+       => a -> m ()
 finish v = E.throwError v
 
 finish_ :: (Monad m, E.MonadError () m, S.MonadState DNNS m) 

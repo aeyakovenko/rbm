@@ -42,6 +42,13 @@ Test-Suite test-Matrix
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.Matrix.test
     Build-Depends:   QuickCheck
 
+Test-Suite test-MLP
+    type:            exitcode-stdio-1.0
+    main-is:         Test/MLP.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.MLP.test
+    Build-Depends:   QuickCheck
+
+
 Executable mnist
     main-is:         Examples/Mnist.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.mnist
