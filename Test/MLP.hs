@@ -65,5 +65,6 @@ test = do
        cfg = stdArgs { maxSuccess = 100, maxSize = 10 }
        runtest tst p =  do putStrLn tst; check =<< verboseCheckWithResult cfg p
    runtest "feedforward"   prop_feedForward
+   runtest "feedforward1"  prop_feedForward1
    runtest "backprop"      prop_backProp
  
