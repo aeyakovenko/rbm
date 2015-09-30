@@ -25,6 +25,20 @@ prop_feedForward bs ni nh no = runIdentity $ do
    outs <- P.feedForward mlp input 
    return $ (M.shape outs) == (fi bs, fi no)
 
+sigmoid :: Double -> Double
+sigmoid d = 1 / (1 + (exp (negate d)))
+
+prop_feedForward1 :: Bool
+prop_feedForward1 = runIdentity $ do
+   let input = M.fromList (1,3) [1,0,1]
+   let mlp = M.fromList (3,2) [1,-1,
+                               1, 1,
+                               1, 1]
+   outs <- P.feedForward [mlp] input 
+   --(1+0+1 ignored since its bias, sigmoid of -1+0+1)
+   return $ (M.toList outs) == [1, sigmoid 0] 
+
+
 prop_backProp :: Word8 -> Word8 -> Word8 -> Bool
 prop_backProp bs ri nh = runIdentity $ do
    let input  = M.fromList (4*(fi bs),3) $ concat $ replicate (fi bs) [1,1,1, 1,1,0, 1,0,1, 1,0,0]
