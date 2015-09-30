@@ -52,10 +52,10 @@ prop_learn bs ni nh = runIdentity $ do
        toD = fromIntegral :: (Int -> Double)
        bits = take ((fi bs) * (fi ni)) $ map (toD . (`mod` 2)) $ seeds s2
        inputs = M.fromList (fi bs, fi ni) bits
-       train = do T.setLearnRate 0.25
-                  finishIf 100 0.05 inputs
-                  T.contraDiv inputs
    erst <- fst <$> (T.run [rbm] $ T.reconErr inputs)
+   let train = do T.setLearnRate 0.25
+                  finishIf 1000 erst inputs
+                  T.contraDiv inputs
    lrb <- snd <$> (T.run [rbm] $ forever train)
    recon <- R.reconstruct inputs lrb
    err <- traceShowId <$> M.mse (inputs -^ recon)

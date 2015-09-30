@@ -140,11 +140,11 @@ popLastLayer :: (Monad m, E.MonadError a m, S.MonadState DNNS m)
         => m (Matrix U I H)
 popLastLayer = do
    v <- S.get
-   let check [] = error "Data.DNN.Trainer.popLastLayer: empty dnn, call initFirstLayer first."
+   let (ll:rest) = reverse $ check $ _nn v
+       check [] = error "Data.DNN.Trainer.popLastLayer: empty dnn, did you forget to pushLastLayer?"
        check ls = ls
-       (rest,l) = splitAt ((length (_nn v))-1) $ check (_nn v)
-   S.put v { _nn = rest }
-   return $ head $ check l
+   S.put v { _nn = reverse $ rest }
+   return $ ll
 
 -- |Push the updated layer as the last in the DNN.
 pushLastLayer :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 

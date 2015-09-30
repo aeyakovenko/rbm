@@ -227,23 +227,30 @@ readLabel :: Int -> IO (Matrix U B H)
 readLabel ix = Matrix <$> readArray name
    where name = "dist/label" ++ (show ix)
 
+maxCount :: Int
+maxCount = 20000
+testCount :: Int
+testCount = 2000
+rowCount :: Int
+rowCount = 5
+
 trainCD :: Double ->  T.Trainer IO ()
 trainCD mine = forever $ do
   T.setLearnRate 0.001
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
      big <- liftIO $ readBatch ix
-     small <- mapM M.d2u $ M.splitRows 5 big
+     small <- mapM M.d2u $ M.splitRows rowCount big
      forM_ small $ \ batch -> do
         T.contraDiv batch
         cnt <- T.getCount
-        when (0 == cnt `mod` 100) $ do
-           err <- T.reconErr big
-           liftIO $ print (cnt, err)
-           when (cnt > 500 || err < mine) $ T.finish_
-        when (0 == cnt `mod` 1000) $ do
+        when (0 == cnt `mod` testCount) $ do
            nns <- T.getDNN
            liftIO $ genSample ("dist/sampleCD." ++ (show cnt)) nns
+        when (0 == cnt `mod` testCount) $ do
+           err <- T.reconErr big
+           liftIO $ print (cnt, err)
+           when (cnt >= maxCount || err < mine) $ T.finish_
 
 trainBP :: Double -> T.Trainer IO ()
 trainBP mine = forever $ do
@@ -252,18 +259,18 @@ trainBP mine = forever $ do
   forM_ batchids $ \ ix -> do
      bbatch <- liftIO $ readBatch ix
      blabel <- liftIO $ readLabel ix
-     sbatch <- mapM M.d2u $ M.splitRows 5 bbatch
-     slabel <- mapM M.d2u $ M.splitRows 5 blabel
+     sbatch <- mapM M.d2u $ M.splitRows rowCount bbatch
+     slabel <- mapM M.d2u $ M.splitRows rowCount blabel
      forM_ (zip sbatch slabel) $ \ (batch,label) -> do
         T.backProp batch label
         cnt <- T.getCount
-        when (0 == cnt `mod` 1000) $ do
+        when (0 == cnt `mod` testCount) $ do
            nns <- T.getDNN
            liftIO $ genSample ("dist/sampleBP." ++ (show cnt)) nns
-        when (0 == cnt `mod` 100) $ do
+        when (0 == cnt `mod` testCount) $ do
            err <- T.forwardErr bbatch blabel
            liftIO $ print (cnt, err)
-           when (cnt > 500 || err < mine) $ T.finish_
+           when (cnt >= maxCount || err < mine) $ T.finish_
 
 sampleProbs :: Monad m => Matrix U H B -> m [Double]
 sampleProbs hxb = do 
@@ -295,23 +302,23 @@ mnist = do
    printSamples 28 "dist/weights.0.bmp" w0
 
    --train the first layer
-   [tr1] <- snd <$> (T.run [r1] $ trainCD 0.01)
-   genSample "dist/sample.1" [tr1]
-   w1 <- M.cast1 <$> M.transpose tr1
+   tr1 <- snd <$> (T.run [r1] $ trainCD 0.01)
+   genSample "dist/sample.1" tr1
+   w1 <- M.cast1 <$> M.transpose (head tr1)
    printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
-   [tr2] <- snd <$> (T.run [r2] $ trainCD 0.0001)
-   genSample "dist/sample.2" [tr1,tr2]
+   tr2 <- snd <$> (T.run (tr1++[r2]) $ trainCD 0.0001)
+   genSample "dist/sample.2" tr2
 
    --train the third layer
-   [tr3] <- snd <$> (T.run [r3] $ trainCD 0.0001)
-   genSample "dist/sample.3" [tr1,tr2,tr3]
+   tr3 <- snd <$> (T.run (tr2++[r3]) $ trainCD 0.0001)
+   genSample "dist/sample.3" tr3
 
-   mapM_ (testBatch [tr1,tr2,tr3]) [0..9] 
+   mapM_ (testBatch tr3) [0..9] 
 
    --backprop
-   nns <- snd <$> (T.run [tr1,tr2,tr3] $ trainBP 0.001)
+   nns <- snd <$> (T.run tr3 $ trainBP 0.001)
    genSample "dist/sample.3" nns
 
    mapM_ (testBatch nns) [0..9] 

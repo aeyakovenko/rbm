@@ -8,7 +8,7 @@ Cabal-Version:       >=1.2
 Library
   exposed-modules:   Data.RBM,
                      Data.DNN.Trainer,
-                     Data.NN,
+                     Data.MLP,
                      Data.Matrix
   Build-Depends:     base,
                      random,
