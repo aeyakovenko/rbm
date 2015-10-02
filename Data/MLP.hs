@@ -63,9 +63,8 @@ applyBackPropH lc !(wij,dbh,obi) = do
    !wave <- M.sum $ M.map abs wij
    !uave <- M.sum $ M.map abs lij
    --scale the updates to the learning rate
-   let lc' = if wave > uave || uave == 0
-               then lc
-               else (wave / uave) * lc
+   let lc' | wave > uave || uave == 0 = lc 
+           | otherwise = (wave / uave) * lc 
    let uij = M.map ((*) (negate lc')) lij
    !uw <- M.d2u $ wij +^ uij
    return uw

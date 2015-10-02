@@ -72,7 +72,7 @@ contraDiv lc ixh seed bxi = do
    !wd <- weightDiff seed ixh bxi
    !uave <- M.sum $ M.map abs wd
    !wave <- M.sum $ M.map abs ixh
-   let lc' | uave == 0 = lc 
+   let lc' | wave > uave || uave == 0 = lc 
            | otherwise = (wave / uave) * lc 
        wd' = M.map ((*) lc') wd
    M.d2u $ ixh +^ wd'
