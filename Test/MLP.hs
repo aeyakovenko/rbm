@@ -13,7 +13,6 @@ import System.Exit (exitFailure)
 import Test.QuickCheck(verboseCheckWithResult)
 import Test.QuickCheck.Test(isSuccess,stdArgs,maxSuccess,maxSize)
 import Data.Word(Word8)
-import Debug.Trace(traceShowId)
 
 
 prop_feedForward :: Word8 -> Word8 -> Word8 -> Word8 -> Bool
@@ -53,10 +52,10 @@ prop_backProp bs ri nh = runIdentity $ do
          outs <- mapM M.d2u $ M.splitRows (fi ri) output
          mapM_ (uncurry T.backProp) $ zip ins outs
          gen <- T.feedForward input
-         err <- traceShowId <$> M.mse (gen M.-^ output)
-         when (err < 0.01) (T.finish True)
+         err <- M.mse (gen M.-^ output)
+         when (err < 0.20) (T.finish True)
          cnt <- T.getCount
-         when (cnt > 10000) (T.finish False)
+         when (cnt > 1000) (T.finish False)
    fst <$> T.run mlp train
 
 prop_backProp1 :: Bool
@@ -65,9 +64,9 @@ prop_backProp1 = runIdentity $ do
    let output = M.fromList (1,2) [1,1]
    let mlp = M.fromList (2,2) [-1,-1,
                                -1,-1]
-   let train (umlp,err) _ = P.backPropagate umlp 0.1 input output
-   (umlp1,e1) <- foldM train ([mlp],1) $ [0]
-   (umlp2,e2) <- foldM train ([mlp],1) $ [0..100]
+   let train (umlp,_) _ = P.backPropagate umlp 0.1 input output
+   (_,e1) <- foldM train ([mlp],1) $ [0::Int]
+   (_,e2) <- foldM train ([mlp],1) $ [0..100::Int]
    return $ e2 < e1
 
 prop_backProp2 :: Bool
@@ -76,9 +75,9 @@ prop_backProp2 = runIdentity $ do
    let output = M.fromList (1,2) [1,0]
    let mlp = M.fromList (2,2) [1,1,
                                1,1]
-   let train (umlp,err) _ = P.backPropagate umlp 0.1 input output
-   (umlp1,e1) <- foldM train ([mlp],1) $ [0]
-   (umlp2,e2) <- foldM train ([mlp],1) $ [0..100]
+   let train (umlp,_) _ = P.backPropagate umlp 0.1 input output
+   (_,e1) <- foldM train ([mlp],1) $ [0::Int]
+   (_,e2) <- foldM train ([mlp],1) $ [0..100::Int]
    return $ e2 < e1
 
 prop_backProp3 :: Bool
@@ -87,9 +86,9 @@ prop_backProp3 = runIdentity $ do
    let output = M.fromList (1,2) [1,1]
    let mlp = M.fromList (2,2) [-1,-1,
                                -1,-1]
-   let train (umlp,err) _ = P.backPropagate umlp 0.1 input output
-   (umlp1,e1) <- foldM train ([mlp,mlp],1) $ [0]
-   (umlp2,e2) <- foldM train ([mlp,mlp],1) $ [0..100]
+   let train (umlp,_) _ = P.backPropagate umlp 0.1 input output
+   (_,e1) <- foldM train ([mlp,mlp],1) $ [0::Int]
+   (_,e2) <- foldM train ([mlp,mlp],1) $ [0..100::Int]
    return $ e2 < e1
 
 prop_backProp4 :: Bool
@@ -98,9 +97,9 @@ prop_backProp4 = runIdentity $ do
    let output = M.fromList (1,2) [1,0]
    let mlp = M.fromList (2,2) [1,1,
                                1,1]
-   let train (umlp,err) _ = P.backPropagate umlp 0.1 input output
-   (umlp1,e1) <- foldM train ([mlp,mlp],1) $ [0]
-   (umlp2,e2) <- foldM train ([mlp,mlp],1) $ [0..100]
+   let train (umlp,_) _ = P.backPropagate umlp 0.1 input output
+   (_,e1) <- foldM train ([mlp,mlp],1) $ [0::Int]
+   (_,e2) <- foldM train ([mlp,mlp],1) $ [0..100::Int]
    return $ e2 < e1
 
 prop_backPropXOR1 :: Bool
@@ -112,9 +111,9 @@ prop_backPropXOR1 = runIdentity $ do
                               1,1]
        m2 = M.fromList (2,2) [1,1,
                               1,1]
-       train (umlp,err) _ = P.backPropagate umlp 0.1 input output
-   (umlp1,e1) <- foldM train ([m1,m2],1) $ [0]
-   (umlp2,e2) <- foldM train ([m1,m2],1) $ [0..100]
+       train (umlp,_) _ = P.backPropagate umlp 0.1 input output
+   (_,e1) <- foldM train ([m1,m2],1) $ [0::Int]
+   (_,e2) <- foldM train ([m1,m2],1) $ [0..100::Int]
    return $ e2 < e1
 
 prop_backPropXOR2 :: Bool
@@ -126,9 +125,9 @@ prop_backPropXOR2 = runIdentity $ do
                               -1,-1]
        m2 = M.fromList (2,2) [-1,-1,
                               -1,-1]
-       train (umlp,err) _ = P.backPropagate umlp 0.1 input output
-   (umlp1,e1) <- foldM train ([m1,m2],1) $ [0]
-   (umlp2,e2) <- foldM train ([m1,m2],1) $ [0..100]
+       train (umlp,_) _ = P.backPropagate umlp 0.1 input output
+   (_,e1) <- foldM train ([m1,m2],1) $ [0::Int]
+   (_,e2) <- foldM train ([m1,m2],1) $ [0..100::Int]
    return $ e2 < e1
 
 
@@ -163,5 +162,5 @@ test = do
    runtest "backpropXOR1"  prop_backPropXOR1
    runtest "backpropXOR2"  prop_backPropXOR2
    runtest "dxe"           prop_DxE
-   runtest "backprop"      prop_feedForward
+   runtest "backprop"      prop_backProp
  
