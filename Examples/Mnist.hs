@@ -228,9 +228,9 @@ readLabel ix = Matrix <$> readArray name
    where name = "dist/label" ++ (show ix)
 
 maxCount :: Int
-maxCount = 20000
+maxCount = 30000
 testCount :: Int
-testCount = 2000
+testCount = 3000
 rowCount :: Int
 rowCount = 5
 

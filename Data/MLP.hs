@@ -17,14 +17,7 @@ import Data.Matrix(Matrix(..)
                   ,H
                   )
 
-import Debug.Trace(trace)
 type MLP = [Matrix U I H]
-
-traceM :: Matrix U a b -> Matrix U a b
-traceM a = trace (show $  M.toList a) a
-
-traceMs :: [Matrix U a b] -> [Matrix U a b]
-traceMs a = trace (show $ map M.toList a) a
 
 new :: Int -> [Int] -> [Matrix U I H]
 new _ [] = []
