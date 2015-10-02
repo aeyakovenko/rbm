@@ -30,7 +30,6 @@ import Data.List.Split(chunksOf)
 import System.Random(newStdGen, randomRs)
 
 import qualified Data.DNN.Trainer as T
-import qualified Data.MLP as P
 import qualified Data.RBM as RB
 import qualified Data.Matrix as M
 import Data.Matrix(Matrix(..)
@@ -65,12 +64,13 @@ normalisePixel p = (fromIntegral p) / 255.0
 toLabelM :: [Int] -> R.Array R.U R.DIM2 Double
 toLabelM labels = m
   where 
-        m = R.fromListUnboxed (R.Z R.:. len R.:. 11) (concatMap vectors labels)
-        maxsz = 11
+        m = R.fromListUnboxed (R.Z R.:. len R.:. 11) (concatMap labelVector labels)
         len = length labels
-        vectors ll = take maxsz $ 1.0:(start ++ end)
-            where start = take (ll - 1) $ repeat 0.0
-                  end = 1.0 : repeat 0.0
+
+labelVector :: Int -> [Double]
+labelVector ll = take 11 $ 1.0:(start ++ end)
+   where start = take (ll - 1) $ repeat 0.0
+         end = 1.0 : repeat 0.0
 
 
 -- MNIST label file format
@@ -272,21 +272,13 @@ trainBP mine = forever $ do
            liftIO $ print (cnt, err)
            when (cnt >= maxCount || err < mine) $ T.finish_
 
-sampleProbs :: Monad m => Matrix U H B -> m [Double]
-sampleProbs hxb = do 
-   total <- M.sum hxb
-   let rrs = M.splitRows 1 hxb
-   let prob rr = (/total) <$> (M.sum rr)
-   mapM prob rrs
-
 testBatch :: [Matrix U I H] -> Int -> IO ()
 testBatch nns ix = do
    let name = "dist/test" ++ (show ix)
-   b <- Matrix <$> readArray name
-   bxh <- P.feedForward nns b
-   hxb <- M.transpose bxh
-   pv <- sampleProbs hxb
-   print (ix, pv)
+   bxi <- Matrix <$> readArray name
+   let bxh = M.fromList (M.row bxi, 11) $ concat $ replicate (M.row bxi) $ labelVector ix
+   (err,_) <- T.run nns $ T.forwardErr bxi bxh
+   print (ix, err)
 
 mnist :: IO ()
 mnist = do 
