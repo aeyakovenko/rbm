@@ -4,7 +4,7 @@ module Data.MLP(new
                ,feedForward
                ,backPropagate
                )where
- 
+
 import qualified Data.Matrix as M
 import Control.Monad(foldM)
 import Data.Matrix(Matrix(..)
@@ -17,7 +17,14 @@ import Data.Matrix(Matrix(..)
                   ,H
                   )
 
+import Debug.Trace(trace)
 type MLP = [Matrix U I H]
+
+traceM :: Matrix U a b -> Matrix U a b
+traceM a = trace (show $  M.toList a) a
+
+traceMs :: [Matrix U a b] -> [Matrix U a b]
+traceMs a = trace (show $ map M.toList a) a
 
 new :: Int -> [Int] -> [Matrix U I H]
 new _ [] = []
@@ -39,49 +46,48 @@ backPropagate nn lc ins tbj = do
 
    --output layer backprop
    !errm <- M.d2u $ result -^ tbj
-   !pbj <- backPropOutput result errm
+   !odbh <- backPropOutput result errm
 
    --hiddel layer backprop results
-   let back !pb !ons = M.cast2 <$> backPropHidden pb ons
-   !pbjs <- scanM back pbj (zip (tail routs) rnn)
+   let back !delta !ons = M.cast2 <$> backPropHidden delta ons
+   !rdbhs <- scanM back odbh (zip (tail routs) rnn)
 
    --apply the backprops
-   let fpbjs = reverse pbjs
-   let inss = ins : (map M.cast2 outs)
-   unn <- mapM (applyBackPropH lc) (zip3 nn fpbjs inss)
+   let dbhs = tail $ reverse rdbhs
+   let inss = map M.cast2 outs
+   unn <- mapM (applyBackPropH lc) (zip3 nn dbhs inss)
    err <- M.mse errm
    return (unn, err)
 {-# INLINE backPropagate #-}
 
 -- |apply backprop to the hidden nodes
 applyBackPropH :: Monad m => Double -> (Matrix U I H, Matrix U B H, Matrix U B I) -> m (Matrix U I H)
-applyBackPropH lc !(wij,pbj,obi) = do
+applyBackPropH lc !(wij,dbh,obi) = do
    oib <- M.transpose obi
-   lij <- oib `M.mmult` pbj
-   let sz :: Double = 1.0 / (fromIntegral $ M.elems wij)
+   lij <- oib `M.mmult` dbh
 
    --calculate the average weight and average update
-   !wave <- ((*) sz) <$> (M.sum $ M.map abs wij)
-   !uave <- ((*) sz) <$> (M.sum $ M.map abs lij)
+   !wave <- M.sum $ M.map abs wij
+   !uave <- M.sum $ M.map abs lij
    --scale the updates to the learning rate
-   let lc' = if wave > uave || uave == 0 
-               then lc 
-               else (wave / uave) * lc 
+   let lc' = if wave > uave || uave == 0
+               then lc
+               else (wave / uave) * lc
    let uij = M.map ((*) (negate lc')) lij
    !uw <- M.d2u $ wij +^ uij
    return uw
 {-# INLINE applyBackPropH #-}
 
 backPropOutput :: Monad m => Matrix U B H -> Matrix U B H -> m (Matrix U B H)
-backPropOutput obj ebj = M.d2u $ ebj *^ obj
+backPropOutput obj ebj = M.d2u $ (M.map dsigmoid obj) *^ ebj 
 {-# INLINE backPropOutput #-}
 
 --calculate the  backprop for the hidden layers
 backPropHidden :: Monad m => Matrix U B H -> (Matrix U B I, Matrix U I H) -> m (Matrix U B I)
-backPropHidden ebj (obi,wij) = do
-   ebj' <- M.transpose =<< wij `M.mmultT` ebj
-   let dbi = M.map dsigmoid obi
-   M.d2u $ dbi *^ (M.cast2 ebj')
+backPropHidden dbh (obi,wih) = do
+   dib <- (wih `M.mmultT` dbh)
+   dbi <- M.transpose dib
+   M.d2u $ (M.map dsigmoid obi) *^ dbi
 {-# INLINE backPropHidden #-}
 
 scanForward :: Monad m => Matrix U B I -> MLP -> m ([Matrix U B H])
@@ -102,7 +108,7 @@ scanM _ a [] = return [a]
 scanM f a ls = do
    x <- f a (head ls)
    xs <- scanM f x (tail ls)
-   return (x:xs)
+   return (a:xs)
 {-# INLINE scanM #-}
 
 
