@@ -174,18 +174,15 @@ perf = do
    defaultMainWith cfg [
        bgroup "energy" [ bench "63x63"  $ whnf (prop_energy 63) 63
                        , bench "127x127"  $ whnf (prop_energy 127) 127
-                       , bench "255x255"  $ whnf (prop_energy 255) 255
                        ]
       ,bgroup "hidden" [ bench "63x63"  $ whnf (prop_hiddenProbs 63) 63
                        , bench "127x127"  $ whnf (prop_hiddenProbs 127) 127
-                       , bench "255x255"  $ whnf (prop_hiddenProbs 255) 255
                        ]
       ,bgroup "input" [ bench "63x63"  $ whnf (prop_inputProbs 63) 63
                       , bench "127x127"  $ whnf (prop_inputProbs 127) 127
-                      , bench "255x255"  $ whnf (prop_inputProbs 255) 255
                       ]
-      ,bgroup "learn" [ bench "7"  $ whnf (prop_learn 7 7) 7
-                      , bench "15"  $ whnf (prop_learn 15 15) 15
+      ,bgroup "learn" [ bench "3"  $ whnf (prop_learn 3 3) 3
+                      , bench "7"  $ whnf (prop_learn 7 7) 7
                       ]
       ]
    putStrLn $ "perf log written to " ++ file
