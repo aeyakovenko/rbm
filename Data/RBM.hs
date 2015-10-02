@@ -7,7 +7,6 @@ module Data.RBM(new
                ,inputPs
                ,sample
                ,reconstruct
-               ,resample
                ,forward
                ,backward
                ) where
@@ -49,16 +48,6 @@ forward bxi rbm = M.cast2 <$> hiddenPs rbm bxi
 -- |Run the RBM backward
 backward :: Monad m => Matrix U B H -> RBM -> m (Matrix U B H)
 backward bxh rbm = M.cast2 <$> (M.transpose =<< inputPs rbm bxh)
-
--- |Reconstruct the input by folding it forward over the stack of RBMs then backwards.
-resample :: Monad m => Int -> Matrix U B I -> [RBM] -> m (Matrix U B I)
-resample seed ins ixhs = do 
-   let (s1:s2:_) = seeds seed
-   let back bxh ixh = sample s2 =<< backward bxh ixh 
-       forw bxi rbm = sample s1 =<< forward bxi rbm 
-   bxh <- M.cast2 <$> foldM forw ins ixhs
-   M.cast2 <$> foldM back bxh (reverse ixhs)
-
 
 -- |Reconstruct the input by folding it forward over the stack of RBMs then backwards.
 reconstruct :: Monad m => Matrix U B I -> [RBM] -> m (Matrix U B I)

@@ -95,14 +95,6 @@ reconstruct bxi = do
    dnn <- getDNN
    R.reconstruct bxi dnn
 
--- |Resample the input with the current RBM
-resample :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
-         => Matrix U B I -> m (Matrix U B I)
-resample bxi = do
-   dnn <- getDNN
-   seed <- nextSeed
-   R.resample seed bxi dnn
-
 -- |Return how many times we have executed contraDiv or backProp
 getCount :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
       => m Int
