@@ -14,6 +14,7 @@ module Data.Matrix( Matrix(..)
                   ) where
 
 import Prelude as P
+import Data.Binary(Binary,put,get)
 import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.Algorithms.Matrix as R
 import qualified Data.Array.Repa.Unsafe as Unsafe
@@ -143,6 +144,10 @@ class MatrixOps a b where
    {-# INLINE toList #-}
 
 instance MatrixOps a b where
+
+instance Binary (Matrix U a b) where
+   put m = put (shape m, toList m)
+   get = (uncurry fromList) <$> get
 
 {--
  - matrix multiply

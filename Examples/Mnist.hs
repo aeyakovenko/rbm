@@ -298,22 +298,32 @@ mnist = do
    genSample "dist/sample.1" tr1
    w1 <- M.cast1 <$> M.transpose (head tr1)
    printSamples 28 "dist/weights.1.bmp" w1
+   B.encodeFile "dist/rbm1" tr1
 
    --train the second layer
    tr2 <- snd <$> (T.run (tr1++[r2]) $ trainCD 0.0001)
    genSample "dist/sample.2" tr2
+   B.encodeFile "dist/rbm2" tr2
 
    --train the third layer
    tr3 <- snd <$> (T.run (tr2++[r3]) $ trainCD 0.0001)
    genSample "dist/sample.3" tr3
+   B.encodeFile "dist/rbm3" tr3
 
    mapM_ (testBatch tr3) [0..9] 
 
    --backprop
-   nns <- snd <$> (T.run tr3 $ trainBP 0.001)
-   genSample "dist/sample.3" nns
+   bp1 <- snd <$> (T.run tr3 $ trainBP 0.001)
+   genSample "dist/sample.3" bp1
+   B.encodeFile "dist/bp1" bp1
 
-   mapM_ (testBatch nns) [0..9] 
+   mapM_ (testBatch bp1) [0..9] 
+
+   bp2 <- snd <$> (T.run bp1 $ trainBP 0.001)
+   genSample "dist/sample.4" bp2
+   B.encodeFile "dist/bp2" bp2
+
+   mapM_ (testBatch bp2) [0..9] 
 
 
 
