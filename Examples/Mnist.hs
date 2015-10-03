@@ -8,9 +8,9 @@ module Examples.Mnist (generateTrainBatches
                       ,generateBigTrainBatches
                       ,generateSamples
                       ,mnist
-                      )
-  where
+                      )where
 
+import Control.Applicative((<|>))
 import Control.Monad.Trans(liftIO)
 import Control.Monad(when,forever,forM_)
 import qualified Data.ByteString.Lazy as BL
@@ -282,9 +282,9 @@ testBatch nns ix = do
 
 mnist :: IO ()
 mnist = do 
-   let r1 = RB.new 0 785 501
-       r2 = RB.new 0 501 501
-       r3 = RB.new 0 501 11
+   let r1 = RB.new 0 785 530
+       r2 = RB.new 0 530 530
+       r3 = RB.new 0 530 11
   
    --output without a trainining
    bzero <- readBatch 0
@@ -294,34 +294,38 @@ mnist = do
    printSamples 28 "dist/weights.0.bmp" w0
 
    --train the first layer
-   tr1 <- snd <$> (T.run [r1] $ trainCD 0.01)
-   genSample "dist/sample.1" tr1
-   w1 <- M.cast1 <$> M.transpose (head tr1)
-   printSamples 28 "dist/weights.1.bmp" w1
+   tr1 <- B.decodeFile "dist/rbm1" <|> (snd <$> (T.run [r1] $ trainCD 0.01))
    B.encodeFile "dist/rbm1" tr1
+   genSample "dist/sample.1" tr1
+   w1 <- M.cast1 <$> M.transpose (last tr1)
+   printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
-   tr2 <- snd <$> (T.run (tr1++[r2]) $ trainCD 0.0001)
-   genSample "dist/sample.2" tr2
+   tr2 <- B.decodeFile "dist/rbm2" <|> (snd <$> (T.run (tr1++[r2]) $ trainCD 0.0001))
    B.encodeFile "dist/rbm2" tr2
+   genSample "dist/sample.2" tr2
+   w2 <- M.cast1 <$> M.transpose (last tr2)
+   printSamples 23 "dist/weights.2.bmp" w2
 
    --train the third layer
-   tr3 <- snd <$> (T.run (tr2++[r3]) $ trainCD 0.0001)
-   genSample "dist/sample.3" tr3
+   tr3 <- B.decodeFile "dist/rbm3" <|> (snd <$> (T.run (tr2++[r3]) $ trainCD 0.0001))
    B.encodeFile "dist/rbm3" tr3
+   genSample "dist/sample.3" tr3
+   w3 <- M.cast1 <$> M.transpose (last tr3)
+   printSamples 23 "dist/weights.3.bmp" w3
 
    mapM_ (testBatch tr3) [0..9] 
 
    --backprop
-   bp1 <- snd <$> (T.run tr3 $ trainBP 0.001)
-   genSample "dist/sample.3" bp1
+   bp1 <- B.decodeFile "dist/bp1" <|> (snd <$> (T.run tr3 $ trainBP 0.001))
    B.encodeFile "dist/bp1" bp1
+   genSample "dist/sample.3" bp1
 
    mapM_ (testBatch bp1) [0..9] 
 
-   bp2 <- snd <$> (T.run bp1 $ trainBP 0.001)
-   genSample "dist/sample.4" bp2
+   bp2 <- B.decodeFile "dist/bp2" <|> (snd <$> (T.run bp1 $ trainBP 0.001))
    B.encodeFile "dist/bp2" bp2
+   genSample "dist/sample.4" bp2
 
    mapM_ (testBatch bp2) [0..9] 
 
