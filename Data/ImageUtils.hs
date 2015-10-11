@@ -1,4 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Data.ImageUtils(writeGIF
                       ,writeBMP
                       ) where
@@ -49,7 +51,7 @@ writeGIF sfile mm' = do
    mm <- generateBox mm' 
    let check (Left err) = error err
        check (Right a) = a
-       fromDynamic (G.ImageY8 im) = (G.greyPalette, 10, im)
+       fromDynamic (G.ImageRGB8 im) = (G.greyPalette, 10,  G.extractComponent G.PlaneRed im)
        fromDynamic _  = error "unexpected image type"
    images <- (map fromDynamic <$> check <$> G.decodeGifImages <$> (BS.readFile sfile)) 
          <|> (return [])

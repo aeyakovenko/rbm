@@ -36,6 +36,10 @@ mnist:tix
 	cabal build mnist
 	./dist/build/mnist/mnist +RTS -N
 
+mnist_clean:tix
+	rm -f dist/rbm*
+	rm -f dist/bp*
+
 batches:tix
 	cabal build testbatches
 	cabal build trainbatches

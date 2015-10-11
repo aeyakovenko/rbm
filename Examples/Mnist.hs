@@ -196,11 +196,11 @@ readLabel ix = Matrix <$> readArray name
    where name = "dist/label" ++ (show ix)
 
 maxCount :: Int
-maxCount = 100000
+maxCount = 50000
 testCount :: Int
-testCount = 10000
+testCount = 100
 rowCount :: Int
-rowCount = 1
+rowCount = 5
 
 trainCD :: String -> Double ->  T.Trainer IO ()
 trainCD file mine = forever $ do
@@ -212,6 +212,7 @@ trainCD file mine = forever $ do
      forM_ small $ \ batch -> do
         T.contraDiv batch
         cnt <- T.getCount
+        liftIO $ print cnt
         when (0 == cnt `mod` testCount) $ do
            nns <- T.getDNN
            ww <- M.cast1 <$> M.transpose (last nns)
