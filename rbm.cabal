@@ -9,7 +9,8 @@ Library
   exposed-modules:   Data.RBM,
                      Data.DNN.Trainer,
                      Data.MLP,
-                     Data.Matrix
+                     Data.Matrix,
+                     Data.ImageUtils
   Build-Depends:     base,
                      random,
                      split,
@@ -18,6 +19,9 @@ Library
                      repa-algorithms,
                      transformers,
                      monad-loops,
+                     JuicyPixels,
+                     JuicyPixels-repa,
+                     vector,
                      deepseq
 
 Test-Suite test-RBM

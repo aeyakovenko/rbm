@@ -129,7 +129,28 @@ prop_backPropXOR2 = runIdentity $ do
    (_,e1) <- foldM train ([m1,m2],1) $ [0::Int]
    (_,e2) <- foldM train ([m1,m2],1) $ [0..100::Int]
    return $ e2 < e1
+{--
+prop_backPropXOR3 :: Bool
+prop_backPropXOR3 times = runIdentity $ do
+   let input  = M.fromList (8,4) $ [1,0,0,0, 1,1,1,1, 1,0,1,1, 1,0,1,0, 1,0,0,1, 1,1,1,0, 1,1,0,1, 1,1,0,0]
+       output = M.fromList (8,2) $ [1,0,     1,0,     1,1,     1,1,     1,1,     1,1,     1,1,     1,1]
+       m1 = M.fromList (4,2) [-1,-1,
+                              -1,-1,
+                              -1,-1,
+                              -1,-1]
+       m2 = M.fromList (2,2) [-1,-1,
+                              -1,-1]
+       m3 = M.fromList (2,2) [-1,-1,
+                              -1,-1]
+       train (umlp,_) (inp,outp) = P.backPropagate umlp 0.1 inp outp
+   ins <- mapM M.d2u $ M.splitRows 1 input
+   outs <- mapM M.d2u $ M.splitRows 1 output
+   let stream = cycle $ zip ins outs
+   (n3,e3) <- foldM train ([m1,m2,m3],1) $ take times stream
+   outs <- P.feedForward n3 input
+   return $ (e3, M.toList outs, map round $ M.toList outs)
 
+--}
 
 prop_DxE :: Bool
 prop_DxE = runIdentity $ do
@@ -161,6 +182,7 @@ test = do
    runtest "backprop4"     prop_backProp4
    runtest "backpropXOR1"  prop_backPropXOR1
    runtest "backpropXOR2"  prop_backPropXOR2
+   --runtest "backpropXOR3"  prop_backPropXOR3
    runtest "dxe"           prop_DxE
    runtest "backprop"      prop_backProp
  

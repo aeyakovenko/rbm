@@ -41,6 +41,14 @@ run nn action = do
        unEither (Right v) = v
    return (unEither a, _nn dnns)
 
+-- |Run RBM algorithm backward
+backward :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
+            => Matrix U B H -> m (Matrix U B I)
+backward !bxh = do
+   nn <- getDNN
+   M.cast2 <$> foldM R.backward bxh (reverse nn)
+
+
 -- |Run feedForward MLP algorithm over the entire DNN.
 feedForward :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
             => Matrix U B I -> m (Matrix U B H)

@@ -19,12 +19,6 @@ import qualified Data.Binary as B
 import Data.Word
 import qualified Data.List.Split as S
 import qualified Data.Array.Repa as R
-import qualified Data.Array.Repa.IO.BMP as R
-import qualified Data.Array.Repa.Algorithms.Matrix as R
-import qualified Data.Array.Repa.Algorithms.Pixel as R
-import Data.Array.Repa(Z(Z)
-                      ,(:.)((:.))
-                      )
 import Codec.Compression.GZip as GZ
 import Data.List.Split(chunksOf)
 import System.Random(newStdGen, randomRs)
@@ -32,6 +26,7 @@ import System.Random(newStdGen, randomRs)
 import qualified Data.DNN.Trainer as T
 import qualified Data.RBM as RB
 import qualified Data.Matrix as M
+import qualified Data.ImageUtils as I
 import Data.Matrix(Matrix(..)
                   ,U
                   ,B
@@ -192,33 +187,6 @@ generateSamples = do
       let bb = toMatrix $ rbatches 
       writeArray name bb 
 
-printSamples::Int -> String -> Matrix U B I -> IO ()
-printSamples imagewidth sfile (Matrix bxi) = do
-   let
-       computeStrip (Z :. rix :. cix) = 
-         let  imagenum = cix `div` imagewidth
-              imagepixel = rix * (imagewidth) + (cix `mod` imagewidth)
-              pos =  Z :. imagenum :. (imagepixel + 1)
-         in   R.rgb8OfGreyDouble $ bxi R.! pos
-       rows = R.row $ R.extent bxi
-       sh = Z :. imagewidth :. (imagewidth * rows)
-   strip <- R.computeUnboxedP $ R.fromFunction sh computeStrip
-   putStrLn $ concat ["generating image: ", sfile]
-   R.writeImageToBMP sfile strip
-
-genSample:: String -> [Matrix U I H] -> IO ()
-genSample sname rbms = do
-   let imagewidth = 28
-       regenSample :: Int -> IO ()
-       regenSample ix = do
-            let sfile = concat [sname, ".", (show ix), ".bmp"]
-            let name = "dist/sample" ++ (show ix)
-                readSample = Matrix <$> (readArray name)
-            bxi <- readSample
-            bxi' <- RB.reconstruct bxi rbms
-            printSamples imagewidth sfile bxi'
-   mapM_ regenSample [0..9::Int] 
-
 readBatch :: Int -> IO (Matrix U B I)
 readBatch ix = Matrix <$> readArray name
    where name = "dist/train" ++ (show ix)
@@ -228,14 +196,14 @@ readLabel ix = Matrix <$> readArray name
    where name = "dist/label" ++ (show ix)
 
 maxCount :: Int
-maxCount = 30000
+maxCount = 3000
 testCount :: Int
-testCount = 3000
+testCount = 300
 rowCount :: Int
 rowCount = 5
 
-trainCD :: Double ->  T.Trainer IO ()
-trainCD mine = forever $ do
+trainCD :: String -> Double ->  T.Trainer IO ()
+trainCD file mine = forever $ do
   T.setLearnRate 0.001
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
@@ -246,14 +214,15 @@ trainCD mine = forever $ do
         cnt <- T.getCount
         when (0 == cnt `mod` testCount) $ do
            nns <- T.getDNN
-           liftIO $ genSample ("dist/sampleCD." ++ (show cnt)) nns
+           ww <- M.cast1 <$> M.transpose (last nns)
+           liftIO $ I.writeGIF file ww
         when (0 == cnt `mod` testCount) $ do
            err <- T.reconErr big
            liftIO $ print (cnt, err)
            when (cnt >= maxCount || err < mine) $ T.finish_
 
-trainBP :: Double -> T.Trainer IO ()
-trainBP mine = forever $ do
+trainBP :: String -> Double -> T.Trainer IO ()
+trainBP file mine = forever $ do
   T.setLearnRate 0.001
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
@@ -265,8 +234,8 @@ trainBP mine = forever $ do
         T.backProp batch label
         cnt <- T.getCount
         when (0 == cnt `mod` testCount) $ do
-           nns <- T.getDNN
-           liftIO $ genSample ("dist/sampleBP." ++ (show cnt)) nns
+           gen <- T.backward (Matrix $ toLabelM [0..9])
+           liftIO $ I.writeGIF file gen
         when (0 == cnt `mod` testCount) $ do
            err <- T.forwardErr bbatch blabel
            liftIO $ print (cnt, err)
@@ -286,46 +255,29 @@ mnist = do
        r2 = RB.new 0 530 530
        r3 = RB.new 0 530 11
   
-   --output without a trainining
-   bzero <- readBatch 0
-   printSamples 28 "dist/original.0.bmp" bzero
-   genSample "dist/sample.0" [r1]
-   w0 <- M.cast1 <$> M.transpose r1
-   printSamples 28 "dist/weights.0.bmp" w0
-
    --train the first layer
-   tr1 <- B.decodeFile "dist/rbm1" <|> (snd <$> (T.run [r1] $ trainCD 0.01))
+   tr1 <- B.decodeFile "dist/rbm1"
+      <|> snd <$> (T.run [r1] $ trainCD "dist/rbm1.gif" 0.01)
    B.encodeFile "dist/rbm1" tr1
-   genSample "dist/sample.1" tr1
-   w1 <- M.cast1 <$> M.transpose (last tr1)
-   printSamples 28 "dist/weights.1.bmp" w1
 
    --train the second layer
-   tr2 <- B.decodeFile "dist/rbm2" <|> (snd <$> (T.run (tr1++[r2]) $ trainCD 0.0001))
+   tr2 <- B.decodeFile "dist/rbm2"
+      <|> (snd <$> (T.run (tr1++[r2]) $ trainCD "dist/rbm2.gif" 0.0001))
    B.encodeFile "dist/rbm2" tr2
-   genSample "dist/sample.2" tr2
-   w2 <- M.cast1 <$> M.transpose (last tr2)
-   printSamples 23 "dist/weights.2.bmp" w2
 
    --train the third layer
-   tr3 <- B.decodeFile "dist/rbm3" <|> (snd <$> (T.run (tr2++[r3]) $ trainCD 0.0001))
+   tr3 <- B.decodeFile "dist/rbm3" 
+      <|> (snd <$> (T.run (tr2++[r3]) $ trainCD "dist/rbm3.gif" 0.0001))
    B.encodeFile "dist/rbm3" tr3
-   genSample "dist/sample.3" tr3
-   w3 <- M.cast1 <$> M.transpose (last tr3)
-   printSamples 23 "dist/weights.3.bmp" w3
-
-   mapM_ (testBatch tr3) [0..9] 
 
    --backprop
-   bp1 <- B.decodeFile "dist/bp1" <|> (snd <$> (T.run tr3 $ trainBP 0.001))
+   bp1 <- B.decodeFile "dist/bp1" 
+      <|> (snd <$> (T.run tr3 $ trainBP "dist/bp1.gif" 0.001))
    B.encodeFile "dist/bp1" bp1
-   genSample "dist/sample.3" bp1
 
-   mapM_ (testBatch bp1) [0..9] 
-
-   bp2 <- B.decodeFile "dist/bp2" <|> (snd <$> (T.run bp1 $ trainBP 0.001))
+   bp2 <- B.decodeFile "dist/bp2" 
+      <|> (snd <$> (T.run bp1 $ trainBP "dist/bp2.gif" 0.001))
    B.encodeFile "dist/bp2" bp2
-   genSample "dist/sample.4" bp2
 
    mapM_ (testBatch bp2) [0..9] 
 
