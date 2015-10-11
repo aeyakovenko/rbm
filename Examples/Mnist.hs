@@ -196,11 +196,11 @@ readLabel ix = Matrix <$> readArray name
    where name = "dist/label" ++ (show ix)
 
 maxCount :: Int
-maxCount = 3000
+maxCount = 100000
 testCount :: Int
-testCount = 300
+testCount = 10000
 rowCount :: Int
-rowCount = 5
+rowCount = 1
 
 trainCD :: String -> Double ->  T.Trainer IO ()
 trainCD file mine = forever $ do
