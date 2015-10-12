@@ -196,9 +196,9 @@ readLabel ix = Matrix <$> readArray name
    where name = "dist/label" ++ (show ix)
 
 maxCount :: Int
-maxCount = 50000
+maxCount = 100000
 testCount :: Int
-testCount = 100
+testCount = 1000
 rowCount :: Int
 rowCount = 5
 
@@ -212,11 +212,10 @@ trainCD file mine = forever $ do
      forM_ small $ \ batch -> do
         T.contraDiv batch
         cnt <- T.getCount
-        liftIO $ print cnt
         when (0 == cnt `mod` testCount) $ do
            nns <- T.getDNN
            ww <- M.cast1 <$> M.transpose (last nns)
-           liftIO $ I.writeGIF file ww
+           liftIO $ I.appendGIF file ww
         when (0 == cnt `mod` testCount) $ do
            err <- T.reconErr big
            liftIO $ print (cnt, err)
@@ -236,7 +235,7 @@ trainBP file mine = forever $ do
         cnt <- T.getCount
         when (0 == cnt `mod` testCount) $ do
            gen <- T.backward (Matrix $ toLabelM [0..9])
-           liftIO $ I.writeGIF file gen
+           liftIO $ I.appendGIF file gen
         when (0 == cnt `mod` testCount) $ do
            err <- T.forwardErr bbatch blabel
            liftIO $ print (cnt, err)

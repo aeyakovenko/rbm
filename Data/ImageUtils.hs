@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-module Data.ImageUtils(writeGIF
+module Data.ImageUtils(appendGIF
                       ,writeBMP
                       ) where
 
@@ -9,7 +9,6 @@ import Control.Applicative((<|>))
 import qualified Data.Matrix as M
 import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.IO.BMP as R
-import qualified Data.Array.Repa.Algorithms.Matrix as R
 import qualified Data.Array.Repa.Algorithms.Pixel as R
 import Codec.Picture.Gif as G
 import Codec.Picture.Types as G
@@ -18,25 +17,30 @@ import Data.Matrix(Matrix(..), U, B, I)
 import qualified Data.Vector.Storable as VS
 
 generateBox::Monad m => Matrix U B I -> m (Matrix U B B)
-generateBox (Matrix bxi) = do
+generateBox mm@(Matrix bxi) = do
    let
        imagewidth :: Int
-       imagewidth = round $ (fromIntegral $ R.col $ R.extent bxi)**(0.5::Double)
+       imagewidth = round $ (fromIntegral $ M.col mm)**(0.5::Double)
+       batches = M.row mm 
+       pixels = M.col mm - 1
        computeImage (R.Z R.:. brix R.:. bcix) = 
-         let  rix = brix `mod` box
-              cix = (bcix `mod` box + (brix `div` box) * box)  * imagewidth
-              imagenum = cix `div` imagewidth
-              imagepixel = rix * (imagewidth) + (cix `mod` imagewidth)
+         let  (imagenum,imagepixel) = index batches pixels brix bcix
               pos =  R.Z R.:. imagenum R.:. (imagepixel + 1)
               safeIndex m (R.Z R.:.mr R.:.mc) (R.Z R.:.r R.:. c)
                   | mr <= r || mc <= c = 0
                   | otherwise = m R.! (R.Z R.:.r R.:.c)
          in    safeIndex bxi (R.extent bxi) pos
-       rows = R.row $ R.extent bxi
-       box = ceiling ((fromIntegral rows) ** 0.5::Double)
-       sh = R.Z R.:. imagewidth * box R.:. imagewidth * box
+       imagesperside = ceiling $ (fromIntegral $ M.row mm)**(0.5::Double) 
+       sh = R.Z R.:. imagewidth * imagesperside R.:. imagewidth * imagesperside
    image <- Matrix <$> (R.computeUnboxedP $ R.fromFunction sh computeImage)
    return image
+
+index :: Int -> Int -> Int -> Int -> (Int,Int)
+index batches pixels rr cc = (image, pixel) 
+   where imagewidth = round $ (fromIntegral pixels)**(0.5::Double)
+         imagesperside = ceiling $ (fromIntegral batches)**(0.5::Double) 
+         image = (rr `div` imagewidth) * imagesperside + (cc `div` imagewidth)
+         pixel = (rr `mod` imagewidth) * imagewidth + (cc `mod` imagewidth)
 
 checkE :: Either String t -> t
 checkE (Left err) = error err
@@ -46,8 +50,8 @@ toImage :: Matrix U B B -> G.Image G.Pixel8
 toImage img = G.Image (M.row img) (M.col img) $ VS.fromList $ map toPixel $ M.toList img
    where toPixel xx = round $ 255 * xx
 
-writeGIF:: String -> Matrix U B I -> IO ()
-writeGIF sfile mm' = do
+appendGIF:: String -> Matrix U B I -> IO ()
+appendGIF sfile mm' = do
    mm <- generateBox mm' 
    let check (Left err) = error err
        check (Right a) = a
