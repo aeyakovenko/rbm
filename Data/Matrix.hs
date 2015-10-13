@@ -143,6 +143,10 @@ class MatrixOps a b where
    toList (Matrix ab) = R.toList ab
    {-# INLINE toList #-}
 
+   fold :: Monad m => (Double -> Double -> Double) -> Double -> Matrix U a b -> m Double
+   fold f z (Matrix ab) = R.foldAllP f z ab
+   {-# INLINE fold #-}
+
 instance MatrixOps a b where
 
 instance Binary (Matrix U a b) where

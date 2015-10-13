@@ -44,7 +44,7 @@ data Image = Image {
 
 toMatrix :: [Image] -> R.Array R.U R.DIM2 Double
 toMatrix images = m
-  where 
+  where
         m = R.fromListUnboxed (R.Z R.:. len R.:. maxsz) (concatMap pixels images)
         maxsz = 1 + (maximum $ map (\ ii -> (iRows ii) * (iColumns ii)) images)
         len = length images
@@ -58,7 +58,7 @@ normalisePixel p = (fromIntegral p) / 255.0
 
 toLabelM :: [Int] -> R.Array R.U R.DIM2 Double
 toLabelM labels = m
-  where 
+  where
         m = R.fromListUnboxed (R.Z R.:. len R.:. 11) (concatMap labelVector labels)
         len = length labels
 
@@ -106,10 +106,10 @@ readLabels filename = do
 -- 0017     unsigned byte   ??               pixel
 -- ........
 -- xxxx     unsigned byte   ??               pixel
--- 
--- Pixels are organized row-wise. Pixel values are 0 to 255. 0 means background (white), 255 
--- means foreground (black). 
- 
+--
+-- Pixels are organized row-wise. Pixel values are 0 to 255. 0 means background (white), 255
+-- means foreground (black).
+
 deserialiseHeader :: Get (Word32, Word32, Word32, Word32, [[Word8]])
 deserialiseHeader = do
   magicNumber <- getWord32be
@@ -128,12 +128,12 @@ readImages filename = do
   return (map (Image (fromIntegral r) (fromIntegral c)) unpackedData)
 
 writeArray :: String -> R.Array R.U R.DIM2 Double -> IO ()
-writeArray fileName array = do 
+writeArray fileName array = do
    let (R.Z R.:. r R.:. c) = R.extent array
    B.encodeFile fileName (r,c,R.toList array)
 
 readArray ::String -> IO (R.Array R.U R.DIM2 Double)
-readArray fileName = do 
+readArray fileName = do
    (r,c,ls) <- B.decodeFile fileName
    return $ R.fromListUnboxed  (R.Z R.:. r R.:. c) ls
 
@@ -143,7 +143,7 @@ generateTrainBatches = do
    let batches = map toMatrix $ chunksOf 128 images
    (flip mapM_) (zip [0::Integer ..] batches) $ \ (ix, bb) -> do
       let name = "dist/train" ++ (show ix)
-      writeArray name bb 
+      writeArray name bb
 
 generateTrainLabels :: IO ()
 generateTrainLabels = do
@@ -151,7 +151,7 @@ generateTrainLabels = do
    let batches = map toLabelM $ chunksOf 128 labels
    (flip mapM_) (zip [0::Integer ..] batches) $ \ (ix, bb) -> do
       let name = "dist/label" ++ (show ix)
-      writeArray name bb 
+      writeArray name bb
 
 generateTestBatches :: IO ()
 generateTestBatches = do
@@ -160,8 +160,8 @@ generateTestBatches = do
    (flip mapM_) ([0..9]) $ \ ix -> do
       let name = "dist/test" ++ (show ix)
       let batch = filter (((==) ix) . fst) $ zip labels images
-      let bb = toMatrix $ snd $ unzip batch 
-      writeArray name bb 
+      let bb = toMatrix $ snd $ unzip batch
+      writeArray name bb
 
 generateBigTrainBatches :: IO ()
 generateBigTrainBatches = do
@@ -170,8 +170,8 @@ generateBigTrainBatches = do
    (flip mapM_) ([0..9]) $ \ ix -> do
       let name = "dist/bigtrain" ++ (show ix)
       let batch = filter (((==) ix) . fst) $ zip labels images
-      let bb = toMatrix $ snd $ unzip batch 
-      writeArray name bb 
+      let bb = toMatrix $ snd $ unzip batch
+      writeArray name bb
 
 generateSamples :: IO ()
 generateSamples = do
@@ -184,8 +184,8 @@ generateSamples = do
           batches = snd $ unzip batch
           len = length batches
           rbatches = take 10 $ map (\ rr -> head $ drop rr $ cycle $ batches) (randomRs (0::Int, len - 1) gen)
-      let bb = toMatrix $ rbatches 
-      writeArray name bb 
+      let bb = toMatrix $ rbatches
+      writeArray name bb
 
 readBatch :: Int -> IO (Matrix U B I)
 readBatch ix = Matrix <$> readArray name
@@ -196,7 +196,7 @@ readLabel ix = Matrix <$> readArray name
    where name = "dist/label" ++ (show ix)
 
 maxCount :: Int
-maxCount = 100000
+maxCount = 25000
 testCount :: Int
 testCount = 1000
 rowCount :: Int
@@ -223,7 +223,7 @@ trainCD file mine = forever $ do
 
 trainBP :: String -> Double -> T.Trainer IO ()
 trainBP file mine = forever $ do
-  T.setLearnRate 0.001
+  T.setLearnRate 0.01
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
      bbatch <- liftIO $ readBatch ix
@@ -250,11 +250,11 @@ testBatch nns ix = do
    print (ix, err)
 
 mnist :: IO ()
-mnist = do 
+mnist = do
    let r1 = RB.new 0 785 530
        r2 = RB.new 0 530 530
        r3 = RB.new 0 530 11
-  
+
    --train the first layer
    tr1 <- B.decodeFile "dist/rbm1"
       <|> snd <$> (T.run [r1] $ trainCD "dist/rbm1.gif" 0.01)
@@ -266,20 +266,24 @@ mnist = do
    B.encodeFile "dist/rbm2" tr2
 
    --train the third layer
-   tr3 <- B.decodeFile "dist/rbm3" 
+   tr3 <- B.decodeFile "dist/rbm3"
       <|> (snd <$> (T.run (tr2++[r3]) $ trainCD "dist/rbm3.gif" 0.0001))
    B.encodeFile "dist/rbm3" tr3
 
    --backprop
-   bp1 <- B.decodeFile "dist/bp1" 
+   bp1 <- B.decodeFile "dist/bp1"
       <|> (snd <$> (T.run tr3 $ trainBP "dist/bp1.gif" 0.001))
    B.encodeFile "dist/bp1" bp1
 
-   bp2 <- B.decodeFile "dist/bp2" 
+   bp2 <- B.decodeFile "dist/bp2"
       <|> (snd <$> (T.run bp1 $ trainBP "dist/bp2.gif" 0.001))
    B.encodeFile "dist/bp2" bp2
 
-   mapM_ (testBatch bp2) [0..9] 
+   bp3 <- B.decodeFile "dist/bp3"
+      <|> (snd <$> (T.run bp2 $ trainBP "dist/bp3.gif" 0.0001))
+   B.encodeFile "dist/bp3" bp2
+
+   mapM_ (testBatch bp3) [0..9]
 
 
 

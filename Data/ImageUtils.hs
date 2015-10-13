@@ -21,24 +21,24 @@ generateBox mm@(Matrix bxi) = do
    let
        imagewidth :: Int
        imagewidth = round $ (fromIntegral $ M.col mm)**(0.5::Double)
-       batches = M.row mm 
+       batches = M.row mm
        pixels = M.col mm - 1
-       computeImage (R.Z R.:. brix R.:. bcix) = 
+       computeImage (R.Z R.:. brix R.:. bcix) =
          let  (imagenum,imagepixel) = index batches pixels brix bcix
               pos =  R.Z R.:. imagenum R.:. (imagepixel + 1)
               safeIndex m (R.Z R.:.mr R.:.mc) (R.Z R.:.r R.:. c)
                   | mr <= r || mc <= c = 0
                   | otherwise = m R.! (R.Z R.:.r R.:.c)
          in    safeIndex bxi (R.extent bxi) pos
-       imagesperside = ceiling $ (fromIntegral $ M.row mm)**(0.5::Double) 
+       imagesperside = ceiling $ (fromIntegral $ M.row mm)**(0.5::Double)
        sh = R.Z R.:. imagewidth * imagesperside R.:. imagewidth * imagesperside
    image <- Matrix <$> (R.computeUnboxedP $ R.fromFunction sh computeImage)
    return image
 
 index :: Int -> Int -> Int -> Int -> (Int,Int)
-index batches pixels rr cc = (image, pixel) 
+index batches pixels rr cc = (image, pixel)
    where imagewidth = round $ (fromIntegral pixels)**(0.5::Double)
-         imagesperside = ceiling $ (fromIntegral batches)**(0.5::Double) 
+         imagesperside = ceiling $ (fromIntegral batches)**(0.5::Double)
          image = (rr `div` imagewidth) * imagesperside + (cc `div` imagewidth)
          pixel = (rr `mod` imagewidth) * imagewidth + (cc `mod` imagewidth)
 
@@ -46,20 +46,24 @@ checkE :: Either String t -> t
 checkE (Left err) = error err
 checkE (Right a) = a
 
-toImage :: Matrix U B B -> G.Image G.Pixel8
-toImage img = G.Image (M.row img) (M.col img) $ VS.fromList $ map toPixel $ M.toList img
-   where toPixel xx = round $ 255 * xx
+toImage :: Monad m => Matrix U B B -> m (G.Image G.Pixel8)
+toImage img = do
+   minv <- M.fold min (read "Infinity") img
+   maxv <- M.fold max (read "-Infinity") img
+   let toPixel xx = round $ 255 * ((xx + minv)/maxv)
+   return $ G.Image (M.row img) (M.col img) $ VS.fromList $ map toPixel $ M.toList img
 
 appendGIF:: String -> Matrix U B I -> IO ()
 appendGIF sfile mm' = do
-   mm <- generateBox mm' 
+   mm <- generateBox mm'
    let check (Left err) = error err
        check (Right a) = a
        fromDynamic (G.ImageRGB8 im) = (G.greyPalette, 10,  G.extractComponent G.PlaneRed im)
        fromDynamic _  = error "unexpected image type"
-   images <- (map fromDynamic <$> check <$> G.decodeGifImages <$> (BS.readFile sfile)) 
+   images <- (map fromDynamic <$> check <$> G.decodeGifImages <$> (BS.readFile sfile))
          <|> (return [])
-   let img = (G.greyPalette, 10, toImage mm)
+   normalized <- toImage mm
+   let img = (G.greyPalette, 10, normalized)
    putStrLn $ concat ["writing image: ", sfile]
    checkE $ G.writeGifImages sfile G.LoopingForever (images ++ [img])
 
