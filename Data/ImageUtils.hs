@@ -9,30 +9,34 @@ import Control.Applicative((<|>))
 import qualified Data.Matrix as M
 import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.IO.BMP as R
-import qualified Data.Array.Repa.Algorithms.Pixel as R
+import qualified Data.Array.Repa.Algorithms.Matrix as R
 import Codec.Picture.Gif as G
 import Codec.Picture.Types as G
 import qualified Data.ByteString as BS
 import Data.Matrix(Matrix(..), U, B, I)
 import qualified Data.Vector.Storable as VS
+import Data.Word(Word8)
 
-generateBox::Monad m => Matrix U B I -> m (Matrix U B B)
+generateBox::Monad m => Matrix U B I -> m (R.Array R.U R.DIM2 Word8)
 generateBox mm@(Matrix bxi) = do
+   minv <- M.fold min (read "Infinity") mm
+   maxv <- M.fold max (read "-Infinity") mm
    let
        imagewidth :: Int
        imagewidth = round $ (fromIntegral $ M.col mm)**(0.5::Double)
        batches = M.row mm
        pixels = M.col mm - 1
+       toPixel xx = round $ 255 * ((xx + minv)/maxv)
        computeImage (R.Z R.:. brix R.:. bcix) =
          let  (imagenum,imagepixel) = index batches pixels brix bcix
               pos =  R.Z R.:. imagenum R.:. (imagepixel + 1)
               safeIndex m (R.Z R.:.mr R.:.mc) (R.Z R.:.r R.:. c)
                   | mr <= r || mc <= c = 0
-                  | otherwise = m R.! (R.Z R.:.r R.:.c)
+                  | otherwise = toPixel $ m R.! (R.Z R.:.r R.:.c)
          in    safeIndex bxi (R.extent bxi) pos
        imagesperside = ceiling $ (fromIntegral $ M.row mm)**(0.5::Double)
        sh = R.Z R.:. imagewidth * imagesperside R.:. imagewidth * imagesperside
-   image <- Matrix <$> (R.computeUnboxedP $ R.fromFunction sh computeImage)
+   image <- R.computeUnboxedP $ R.fromFunction sh computeImage
    return image
 
 index :: Int -> Int -> Int -> Int -> (Int,Int)
@@ -46,12 +50,9 @@ checkE :: Either String t -> t
 checkE (Left err) = error err
 checkE (Right a) = a
 
-toImage :: Monad m => Matrix U B B -> m (G.Image G.Pixel8)
+toImage :: Monad m => R.Array R.U R.DIM2 Word8 -> m (G.Image G.Pixel8)
 toImage img = do
-   minv <- M.fold min (read "Infinity") img
-   maxv <- M.fold max (read "-Infinity") img
-   let toPixel xx = round $ 255 * ((xx + minv)/maxv)
-   return $ G.Image (M.row img) (M.col img) $ VS.fromList $ map toPixel $ M.toList img
+   return $ G.Image (R.row $ R.extent img) (R.col $ R.extent img) $ VS.fromList $ R.toList img
 
 appendGIF:: String -> Matrix U B I -> IO ()
 appendGIF sfile mm' = do
@@ -69,8 +70,8 @@ appendGIF sfile mm' = do
 
 writeBMP::String -> Matrix U B I -> IO ()
 writeBMP sfile bxi = do
-   (Matrix image) <- generateBox bxi
-   ar <- R.computeUnboxedP $ R.map R.rgb8OfGreyDouble image
+   image <- generateBox bxi
+   ar <- R.computeUnboxedP $ R.map (\xx -> (xx,xx,xx)) image
    putStrLn $ concat ["writing image: ", sfile]
    R.writeImageToBMP sfile ar
 

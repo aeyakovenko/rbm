@@ -221,9 +221,9 @@ trainCD file mine = forever $ do
            liftIO $ print (cnt, err)
            when (cnt >= maxCount || err < mine) $ T.finish_
 
-trainBP :: String -> Double -> T.Trainer IO ()
-trainBP file mine = forever $ do
-  T.setLearnRate 0.01
+trainBP :: String -> Double -> Double -> T.Trainer IO ()
+trainBP file lr mine = forever $ do
+  T.setLearnRate lr
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
      bbatch <- liftIO $ readBatch ix
@@ -262,25 +262,25 @@ mnist = do
 
    --train the second layer
    tr2 <- B.decodeFile "dist/rbm2"
-      <|> (snd <$> (T.run (tr1++[r2]) $ trainCD "dist/rbm2.gif" 0.0001))
+      <|> (snd <$> (T.run (tr1++[r2]) $ trainCD "dist/rbm2.gif" 0.001))
    B.encodeFile "dist/rbm2" tr2
 
    --train the third layer
    tr3 <- B.decodeFile "dist/rbm3"
-      <|> (snd <$> (T.run (tr2++[r3]) $ trainCD "dist/rbm3.gif" 0.0001))
+      <|> (snd <$> (T.run (tr2++[r3]) $ trainCD "dist/rbm3.gif" 0.001))
    B.encodeFile "dist/rbm3" tr3
 
    --backprop
    bp1 <- B.decodeFile "dist/bp1"
-      <|> (snd <$> (T.run tr3 $ trainBP "dist/bp1.gif" 0.001))
+      <|> (snd <$> (T.run tr3 $ trainBP "dist/bp1.gif" 0.01 0.001))
    B.encodeFile "dist/bp1" bp1
 
    bp2 <- B.decodeFile "dist/bp2"
-      <|> (snd <$> (T.run bp1 $ trainBP "dist/bp2.gif" 0.001))
+      <|> (snd <$> (T.run bp1 $ trainBP "dist/bp2.gif" 0.001 0.001))
    B.encodeFile "dist/bp2" bp2
 
    bp3 <- B.decodeFile "dist/bp3"
-      <|> (snd <$> (T.run bp2 $ trainBP "dist/bp3.gif" 0.0001))
+      <|> (snd <$> (T.run bp2 $ trainBP "dist/bp3.gif" 0.001 0.001))
    B.encodeFile "dist/bp3" bp2
 
    mapM_ (testBatch bp3) [0..9]
