@@ -61,27 +61,28 @@ Executable mnist
                      repa-algorithms,
                      zlib,
                      transformers,
+                     statistics-linreg,
                      binary
 
+--mnist data generation
 Executable generatetrainlabels
     main-is:         Examples/Mnist.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.generateTrainLabels
 
-----mnist data generation
---Executable trainbatches
---    main-is:         Data/Mnist.hs
---    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateTrainBatches
---
---Executable testbatches
---    main-is:         Data/Mnist.hs
---    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateTestBatches
---
---Executable bigtrainbatches
---    main-is:         Data/Mnist.hs
---    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateBigTrainBatches
---
---Executable samplebatches
---    main-is:         Data/Mnist.hs
---    ghc-options:     -Werror -Wall -threaded -O3 -main-is Data.Mnist.generateSamples
---
---
+Executable trainbatches
+    main-is:         Examples/Mnist.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.generateTrainBatches
+
+Executable testbatches
+    main-is:         Examples/Mnist.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.generateTestBatches
+
+Executable bigtrainbatches
+    main-is:         Examples/Mnist.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.generateBigTrainBatches
+
+Executable samplebatches
+    main-is:         Examples/Mnist.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.generateSamples
+
+

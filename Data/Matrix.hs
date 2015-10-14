@@ -19,6 +19,7 @@ import qualified Data.Array.Repa as R
 import qualified Data.Array.Repa.Algorithms.Matrix as R
 import qualified Data.Array.Repa.Unsafe as Unsafe
 import qualified Data.Array.Repa.Algorithms.Randomish as R
+import qualified Data.Vector.Unboxed as V
 import Control.DeepSeq(NFData, rnf)
 import Data.Array.Repa(Array
                       ,U
@@ -146,6 +147,10 @@ class MatrixOps a b where
    fold :: Monad m => (Double -> Double -> Double) -> Double -> Matrix U a b -> m Double
    fold f z (Matrix ab) = R.foldAllP f z ab
    {-# INLINE fold #-}
+
+   toUnboxed :: Matrix U a b -> V.Vector Double
+   toUnboxed (Matrix ar) = R.toUnboxed ar
+   {-# INLINE toUnboxed #-}
 
 instance MatrixOps a b where
 

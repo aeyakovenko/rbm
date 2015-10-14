@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -19,14 +20,16 @@ import Data.Word(Word8)
 
 generateBox::Monad m => Matrix U B I -> m (R.Array R.U R.DIM2 Word8)
 generateBox mm@(Matrix bxi) = do
-   minv <- M.fold min (read "Infinity") mm
-   maxv <- M.fold max (read "-Infinity") mm
+   !minv <- M.fold min (read "Infinity") mm
+   !maxv <- M.fold max (read "-Infinity") mm
    let
        imagewidth :: Int
        imagewidth = round $ (fromIntegral $ M.col mm)**(0.5::Double)
        batches = M.row mm
        pixels = M.col mm - 1
-       toPixel xx = round $ 255 * ((xx + minv)/maxv)
+       toPixel xx 
+         | maxv == minv = 0
+         | otherwise = round $ 255 * ((xx - minv)/(maxv - minv))
        computeImage (R.Z R.:. brix R.:. bcix) =
          let  (imagenum,imagepixel) = index batches pixels brix bcix
               pos =  R.Z R.:. imagenum R.:. (imagepixel + 1)

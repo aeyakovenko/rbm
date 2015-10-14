@@ -4,9 +4,6 @@
 module Examples.Mnist (generateTrainBatches
                       ,generateTrainLabels
                       ,generateTestBatches
-                      ,readArray
-                      ,generateBigTrainBatches
-                      ,generateSamples
                       ,mnist
                       )where
 
@@ -22,6 +19,7 @@ import qualified Data.Array.Repa as R
 import Codec.Compression.GZip as GZ
 import Data.List.Split(chunksOf)
 import System.Random(newStdGen, randomRs)
+import Statistics.LinearRegression as S
 
 import qualified Data.DNN.Trainer as T
 import qualified Data.RBM as RB
@@ -163,30 +161,6 @@ generateTestBatches = do
       let bb = toMatrix $ snd $ unzip batch
       writeArray name bb
 
-generateBigTrainBatches :: IO ()
-generateBigTrainBatches = do
-   images <- readImages "dist/train-images-idx3-ubyte.gz"
-   labels <- readLabels "dist/train-labels-idx1-ubyte.gz"
-   (flip mapM_) ([0..9]) $ \ ix -> do
-      let name = "dist/bigtrain" ++ (show ix)
-      let batch = filter (((==) ix) . fst) $ zip labels images
-      let bb = toMatrix $ snd $ unzip batch
-      writeArray name bb
-
-generateSamples :: IO ()
-generateSamples = do
-   images <- readImages "dist/train-images-idx3-ubyte.gz"
-   labels <- readLabels "dist/train-labels-idx1-ubyte.gz"
-   (flip mapM_) ([0..9]) $ \ ix -> do
-      gen <- newStdGen
-      let name = "dist/sample" ++ (show ix)
-      let batch = filter (((==) ix) . fst) $ zip labels images
-          batches = snd $ unzip batch
-          len = length batches
-          rbatches = take 10 $ map (\ rr -> head $ drop rr $ cycle $ batches) (randomRs (0::Int, len - 1) gen)
-      let bb = toMatrix $ rbatches
-      writeArray name bb
-
 readBatch :: Int -> IO (Matrix U B I)
 readBatch ix = Matrix <$> readArray name
    where name = "dist/train" ++ (show ix)
@@ -246,8 +220,9 @@ testBatch nns ix = do
    let name = "dist/test" ++ (show ix)
    bxi <- Matrix <$> readArray name
    let bxh = M.fromList (M.row bxi, 11) $ concat $ replicate (M.row bxi) $ labelVector ix
-   (err,_) <- T.run nns $ T.forwardErr bxi bxh
-   print (ix, err)
+   (bxh',_) <- T.run nns $ T.feedForward bxi
+   let cor = S.correl (M.toUnboxed bxh') (M.toUnboxed bxh)
+   print (ix, cor)
 
 mnist :: IO ()
 mnist = do
@@ -257,31 +232,37 @@ mnist = do
 
    --train the first layer
    tr1 <- B.decodeFile "dist/rbm1"
-      <|> snd <$> (T.run [r1] $ trainCD "dist/rbm1.gif" 0.01)
-   B.encodeFile "dist/rbm1" tr1
+      <|> do tr1 <- snd <$> (T.run [r1] $ trainCD "dist/rbm1.gif" 0.01)
+             B.encodeFile "dist/rbm1" tr1
+             return tr1
 
    --train the second layer
    tr2 <- B.decodeFile "dist/rbm2"
-      <|> (snd <$> (T.run (tr1++[r2]) $ trainCD "dist/rbm2.gif" 0.001))
-   B.encodeFile "dist/rbm2" tr2
+      <|> do tr2 <- snd <$> (T.run (tr1++[r2]) $ trainCD "dist/rbm2.gif" 0.001)
+             B.encodeFile "dist/rbm2" tr2
+             return tr2
 
    --train the third layer
    tr3 <- B.decodeFile "dist/rbm3"
-      <|> (snd <$> (T.run (tr2++[r3]) $ trainCD "dist/rbm3.gif" 0.001))
-   B.encodeFile "dist/rbm3" tr3
+      <|> do tr3 <- snd <$> (T.run (tr2++[r3]) $ trainCD "dist/rbm3.gif" 0.001)
+             B.encodeFile "dist/rbm3" tr3
+             return tr3
 
    --backprop
    bp1 <- B.decodeFile "dist/bp1"
-      <|> (snd <$> (T.run tr3 $ trainBP "dist/bp1.gif" 0.01 0.001))
-   B.encodeFile "dist/bp1" bp1
+      <|> do bp1 <- snd <$> (T.run tr3 $ trainBP "dist/bp1.gif" 0.01 0.001)
+             B.encodeFile "dist/bp1" bp1
+             return bp1
 
    bp2 <- B.decodeFile "dist/bp2"
-      <|> (snd <$> (T.run bp1 $ trainBP "dist/bp2.gif" 0.001 0.001))
-   B.encodeFile "dist/bp2" bp2
+      <|> do bp2 <- snd <$> (T.run bp1 $ trainBP "dist/bp2.gif" 0.001 0.001)
+             B.encodeFile "dist/bp2" bp2
+             return bp2
 
    bp3 <- B.decodeFile "dist/bp3"
-      <|> (snd <$> (T.run bp2 $ trainBP "dist/bp3.gif" 0.001 0.001))
-   B.encodeFile "dist/bp3" bp2
+      <|> do bp3 <- snd <$> (T.run bp2 $ trainBP "dist/bp3.gif" 0.001 0.001)
+             B.encodeFile "dist/bp3" bp3
+             return bp3
 
    mapM_ (testBatch bp3) [0..9]
 

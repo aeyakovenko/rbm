@@ -16,7 +16,10 @@ tix_files=perf-RBM.tix\
 			 console.tix
 
 #all:mnist
-all:dist/cabal.build.ok dist/cabal.test.ok 
+all:build test
+
+build:dist/cabal.build.ok 
+test:dist/cabal.test.ok
 
 dist/cabal.test.ok:$(hs_files) dist/setup-config tix
 	cabal test 2>&1
@@ -40,15 +43,16 @@ mnist_clean:tix
 	rm -f dist/rbm*
 	rm -f dist/bp*
 
-batches:tix
-	cabal build testbatches
-	cabal build trainbatches
+mnist_data:data build tix
+	./dist/build/trainbatches/trainbatches
+	./dist/build/testbatches/testbatches
+	./dist/build/generatetrainlabels/generatetrainlabels
+	rm -f $(tix_files)
+
+mnist_data_clean:
 	rm dist/test* || echo ok
 	rm dist/train* || echo ok
-	./dist/build/trainbatches/trainbatches
-	rm -f $(tix_files)
-	./dist/build/testbatches/testbatches
-	rm -f $(tix_files)
+	rm dist/label* || echo ok
 
 tix:
 	rm -f $(tix_files)

@@ -1,21 +1,18 @@
 Restricted Boltzmann Machine
 ============================
 
-Trying to follow [Hinton's paper](docs/hinton_rbm_guide.pdf) on rbms.
+Implementation of [Hinton's paper](docs/hinton_rbm_guide.pdf) on rbms, and [Back Propagation](docs/rojas-backprop.pdf).
 
-Simple single layer implementation in haskell using lists.  Take a look at [RBM/List.hs](RBM/List.hs).  
-
-Repa based single layer implementation [RBM/Repa.hs](RBM/Repa.hs).
-
-Multi layer implmentation [DBN/Repa.hs](DBN/Repa.hs).
-
+run `make mnist_data` to generate the test data
 run `make mnist` to test the mnist training.
 
-Todo
-----
+Monitoring Progress
+-------------------
 
-* console to monitor the recustructions, change rate etc..
-* gpu based one using accelrate-cuda 
+Open dist/rbm[1-3].gif.
+
+These generated files contain what the 
+open dist/bp[1-3].gif
 
 experiments
 -----------
