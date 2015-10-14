@@ -27,12 +27,15 @@ Monitoring Progress
 -------------------
 
 First layer of weights should approximate the input we are training on.  It can be seen here 
+
 ![dist/rbm1.gif](results/rbm1.gif?raw=true)
 
 Second layer looks interesting, but not sure how to interpret it 
+
 ![dist/rbm1.gif](results/rbm2.gif?raw=true)
 
 Thrid layer looks like it might be picking actual classes
+
 ![dist/rbm1.gif](results/rbm3.gif?raw=true)
 
 For backprop generated the output of the RBM run backwards after backprop training the classes.  I expected to what the network considered each number to look like, but they all look the same.
