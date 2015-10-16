@@ -18,7 +18,6 @@ import qualified Data.List.Split as S
 import qualified Data.Array.Repa as R
 import Codec.Compression.GZip as GZ
 import Data.List.Split(chunksOf)
-import System.Random(newStdGen, randomRs)
 import Statistics.LinearRegression as S
 
 import qualified Data.DNN.Trainer as T
@@ -62,7 +61,7 @@ toLabelM labels = m
 
 labelVector :: Int -> [Double]
 labelVector ll = take 11 $ 1.0:(start ++ end)
-   where start = take (ll - 1) $ repeat 0.0
+   where start = take ll $ repeat 0.0
          end = 1.0 : repeat 0.0
 
 
@@ -255,12 +254,12 @@ mnist = do
              return bp1
 
    bp2 <- B.decodeFile "dist/bp2"
-      <|> do bp2 <- snd <$> (T.run bp1 $ trainBP "dist/bp2.gif" 0.001 0.001)
+      <|> do bp2 <- snd <$> (T.run bp1 $ trainBP "dist/bp2.gif" 0.01 0.001)
              B.encodeFile "dist/bp2" bp2
              return bp2
 
    bp3 <- B.decodeFile "dist/bp3"
-      <|> do bp3 <- snd <$> (T.run bp2 $ trainBP "dist/bp3.gif" 0.001 0.001)
+      <|> do bp3 <- snd <$> (T.run bp2 $ trainBP "dist/bp3.gif" 0.01 0.001)
              B.encodeFile "dist/bp3" bp3
              return bp3
 

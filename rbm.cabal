@@ -77,12 +77,3 @@ Executable testbatches
     main-is:         Examples/Mnist.hs
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.generateTestBatches
 
-Executable bigtrainbatches
-    main-is:         Examples/Mnist.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.generateBigTrainBatches
-
-Executable samplebatches
-    main-is:         Examples/Mnist.hs
-    ghc-options:     -Werror -Wall -threaded -O3 -main-is Examples.Mnist.generateSamples
-
-
