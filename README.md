@@ -10,6 +10,7 @@ After backprop there is very strong correlation between the output and the label
 
 * correlation coeffecient after 25k/5
 
+--|-----------------
 0 | 0.96931061006877  
 1 | 0.97586250662331  
 2 | 0.92920411708058  
@@ -23,6 +24,7 @@ After backprop there is very strong correlation between the output and the label
 
 * correlation coeffecient after 125k/5
 
+--|-----------------
 0 | 0.99044301435635  
 1 | 0.98928921973885  
 2 | 0.97034648760490  
