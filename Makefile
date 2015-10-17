@@ -9,11 +9,9 @@ hs_files=Data/RBM.hs\
 tix_files=perf-RBM.tix\
 			 trainbatches.tix\
 			 testbatches.tix\
+			 generatetrainlabels.tix\
 			 mnist.tix\
 			 test-RBM.tix\
-			 bigtrainbatches.tix\
-			 generatetrainlabels.tix\
-			 console.tix
 
 #all:mnist
 all:build test
