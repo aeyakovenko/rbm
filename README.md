@@ -47,11 +47,11 @@ First layer of weights should approximate the input we are training on.  It can 
 
 ![dist/rbm1.gif](results/rbm1.gif?raw=true)
 
-Second layer looks interesting, but not sure how to interpret it 
+Second layer looks interesting, but not sure how to interpret it.
 
 ![dist/rbm1.gif](results/rbm2.gif?raw=true)
 
-Thrid layer looks like it might be picking actual classes
+Thrid layer, is similar to the second one.  My guess is that the box on the top left is related to the bias nodes.
 
 ![dist/rbm1.gif](results/rbm3.gif?raw=true)
 
