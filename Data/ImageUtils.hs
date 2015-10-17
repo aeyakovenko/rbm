@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Data.ImageUtils(appendGIF
                       ,writeBMP
+                      ,gifCat 
                       ) where
 
 import Control.Applicative((<|>))
@@ -78,4 +79,19 @@ writeBMP sfile bxi = do
    putStrLn $ concat ["writing image: ", sfile]
    R.writeImageToBMP sfile ar
 
+
+gifCat :: String -> [String] -> IO ()
+gifCat _ [] = return ()
+gifCat f1 (f2:rest) = do 
+   let fromDynamic (G.ImageRGB8 im) = (G.greyPalette, 10,  G.extractComponent G.PlaneRed im)
+       fromDynamic _  = error "unexpected image type"
+       check (Left err) = error err
+       check (Right a) = a
+       getImages sfile = do (map fromDynamic <$> check <$> G.decodeGifImages <$> (BS.readFile sfile))
+                        <|> (return [])
+   f1s <- getImages f1
+   f2s <- getImages f2
+   putStrLn $ concat ["writing image: ", f1]
+   checkE $ G.writeGifImages f1 G.LoopingForever (f1s ++ f2s)
+   gifCat f1 rest
 

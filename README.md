@@ -55,11 +55,7 @@ Thrid layer, is similar to the second one.  My guess is that the box on the top 
 
 ![dist/rbm1.gif](results/rbm3.gif?raw=true)
 
-For backprop generated the output of the RBM run backwards after backprop training the classes.  Each gif represents 25k minibatches of 5 images learned at 0.01 learning rate.   If you squint you can kind of distinguish what numbrer the blur is supposed to represent.
+For backprop generated the output of the RBM run backwards after backprop training the classes.  The gif represents about 250k minibatches of 5 images at 0.01 learning rate.   The network slowly convrges on what looks like the numbers its trying to classify.
 
-![dist/bp1.gif](results/bp1.gif?raw=true)
-![dist/bp2.gif](results/bp2.gif?raw=true)
-![dist/bp3.gif](results/bp3.gif?raw=true)
-![dist/bp4.gif](results/bp4.gif?raw=true)
-![dist/bp5.gif](results/bp5.gif?raw=true)
+![dist/bp1.gif](results/bp13.gif?raw=true)
 
