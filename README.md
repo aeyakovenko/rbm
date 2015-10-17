@@ -23,27 +23,27 @@ label|      correlation
    8 | 0.91446780721296  
    9 | 0.86919757980633  
 
-* 125k minibatches of 5 at 0.01 learning rate
+* 250k minibatches of 5 at 0.01 learning rate
 
 label|      correlation
 -----|-----------------
-   0 | 0.99044301435635  
-   1 | 0.98928921973885  
-   2 | 0.97034648760490  
-   3 | 0.97159955796703  
-   4 | 0.97142776042971  
-   5 | 0.95405431999714  
-   6 | 0.97616215725713  
-   7 | 0.96718188691733  
-   8 | 0.96738713964942  
-   9 | 0.96226386748393  
+   0 | 0.99341336376690
+   1 | 0.99060696767070
+   2 | 0.98038157977265
+   3 | 0.98314542811599
+   4 | 0.97051993597869
+   5 | 0.97578985146789
+   6 | 0.98018183041991
+   7 | 0.97570483598546
+   8 | 0.96970036917824
+   9 | 0.97368923077333
 
-So its pretty good at picking the right number.
+So it's pretty good at picking the right number.
 
 Monitoring Progress
 -------------------
 
-First layer of weights should approximate the input we are training on.  It can be seen here 
+First layer of weights should approximate the input we are training on.  It can be seen here (its a large gif, so it takes a few seconds to load)
 
 ![dist/rbm1.gif](results/rbm1.gif?raw=true)
 
