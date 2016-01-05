@@ -40,7 +40,7 @@ label|      correlation
    8 | 0.96970036917824
    9 | 0.97368923077333
 
-So it's pretty good at picking the right number.
+As you can see, after 250k minibatches there is a significant improvement in digit recognition.
 
 Monitoring Progress
 -------------------
@@ -49,11 +49,11 @@ First layer of weights should approximate the input we are training on.  It can 
 
 ![dist/rbm1.gif](results/rbm1.gif?raw=true)
 
-Second layer looks interesting, but not sure how to interpret it.
+Second layer picks up some of the features of the first layer.
 
 ![dist/rbm1.gif](results/rbm2.gif?raw=true)
 
-Thrid layer, is similar to the second one.  My guess is that the box on the top left is related to the bias nodes.
+Thrid layer. My guess is that the box on the top left is related to the bias nodes.
 
 ![dist/rbm1.gif](results/rbm3.gif?raw=true)
 

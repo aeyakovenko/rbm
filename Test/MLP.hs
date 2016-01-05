@@ -148,7 +148,7 @@ prop_DxE = runIdentity $ do
 
 prop_finish_ :: Bool
 prop_finish_ = () == rv
-   where mlp = new 0 [3,3,3]
+   where mlp = new 0 []
          rv = fst $ runIdentity $ T.run mlp T.finish_
 
 prop_poplast :: Bool
