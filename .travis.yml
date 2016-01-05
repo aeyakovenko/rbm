@@ -17,16 +17,17 @@ script:
  - cabal configure --enable-tests --enable-benchmarks -v2
  - cabal build
  - cabal test
- - cabal check
- - cabal sdist
- - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
-   cd dist/;
-   if [ -f "$SRC_TGZ" ]; then
-      cabal install "$SRC_TGZ";
-   else
-      echo "expected '$SRC_TGZ' not found";
-      exit 1;
-   fi
+
+# - cabal check
+# - cabal sdist
+# - export SRC_TGZ=$(cabal info . | awk '{print $2 ".tar.gz";exit}') ;
+#   cd dist/;
+#   if [ -f "$SRC_TGZ" ]; then
+#      cabal install "$SRC_TGZ";
+#   else
+#      echo "expected '$SRC_TGZ' not found";
+#      exit 1;
+#   fi
 
 after_script:
    hpc-coveralls test-all --display-report --repo-token=15KpYJ4FssvAiuhg5OBivEQbPYPn6aMSW
