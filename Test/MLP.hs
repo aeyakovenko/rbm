@@ -51,8 +51,7 @@ prop_backProp bs ri nh = runIdentity $ do
          ins <- mapM M.d2u $ M.splitRows (fi ri) input
          outs <- mapM M.d2u $ M.splitRows (fi ri) output
          mapM_ (uncurry T.backProp) $ zip ins outs
-         gen <- T.feedForward input
-         err <- M.mse (gen M.-^ output)
+         err <- T.forwardErr input output
          when (err < 0.20) (T.finish True)
          cnt <- T.getCount
          when (cnt > 1000) (T.finish False)
@@ -129,28 +128,6 @@ prop_backPropXOR2 = runIdentity $ do
    (_,e1) <- foldM train ([m1,m2],1) $ [0::Int]
    (_,e2) <- foldM train ([m1,m2],1) $ [0..100::Int]
    return $ e2 < e1
-{--
-prop_backPropXOR3 :: Bool
-prop_backPropXOR3 times = runIdentity $ do
-   let input  = M.fromList (8,4) $ [1,0,0,0, 1,1,1,1, 1,0,1,1, 1,0,1,0, 1,0,0,1, 1,1,1,0, 1,1,0,1, 1,1,0,0]
-       output = M.fromList (8,2) $ [1,0,     1,0,     1,1,     1,1,     1,1,     1,1,     1,1,     1,1]
-       m1 = M.fromList (4,2) [-1,-1,
-                              -1,-1,
-                              -1,-1,
-                              -1,-1]
-       m2 = M.fromList (2,2) [-1,-1,
-                              -1,-1]
-       m3 = M.fromList (2,2) [-1,-1,
-                              -1,-1]
-       train (umlp,_) (inp,outp) = P.backPropagate umlp 0.1 inp outp
-   ins <- mapM M.d2u $ M.splitRows 1 input
-   outs <- mapM M.d2u $ M.splitRows 1 output
-   let stream = cycle $ zip ins outs
-   (n3,e3) <- foldM train ([m1,m2,m3],1) $ take times stream
-   outs <- P.feedForward n3 input
-   return $ (e3, M.toList outs, map round $ M.toList outs)
-
---}
 
 prop_DxE :: Bool
 prop_DxE = runIdentity $ do
@@ -168,7 +145,22 @@ prop_DxE = runIdentity $ do
    r1b <- d2 `M.mmult` e2
    r12 <- M.d2u $ d12 M.*^ e12
    return $ M.toList r1a ++ M.toList r1b == M.toList r12
-   
+
+prop_finish_ :: Bool
+prop_finish_ = () == rv
+   where mlp = new 0 [3,3,3]
+         rv = fst $ runIdentity $ T.run mlp T.finish_
+
+prop_poplast :: Bool
+prop_poplast = (2,3) == rv
+   where mlp = new 0 [1,2,3]
+         rv = M.shape $ fst $ runIdentity $ T.run mlp $ T.popLastLayer
+
+prop_backward :: Bool
+prop_backward = (2,1) == rv
+   where mlp = new 0 [1,2,3]
+         rv = M.shape $ fst $ runIdentity $ T.run mlp $ T.backward (M.fromList (2,3) [1,2,3,4,5,6])
+            
 test :: IO ()
 test = do
    let check rr = if (isSuccess rr) then return () else exitFailure
@@ -182,7 +174,9 @@ test = do
    runtest "backprop4"     prop_backProp4
    runtest "backpropXOR1"  prop_backPropXOR1
    runtest "backpropXOR2"  prop_backPropXOR2
-   --runtest "backpropXOR3"  prop_backPropXOR3
    runtest "dxe"           prop_DxE
    runtest "backprop"      prop_backProp
+   runtest "finish_"       prop_finish_
+   runtest "poplast"       prop_poplast
+   runtest "backward"      prop_backward
  

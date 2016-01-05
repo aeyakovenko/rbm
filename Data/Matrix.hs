@@ -160,7 +160,7 @@ instance Binary (Matrix U a b) where
 
 {--
  - matrix multiply
- - a x (transpose b)
+ - A x (transpose B)
  - based on mmultP from repa-algorithms-3.3.1.2
  -}
 mmultTP  :: Monad m
@@ -182,9 +182,9 @@ mmultTP arr trr
 
 {--
  - regular matrix multiply
- - a x b
+ - A x B
  - based on mmultP from repa-algorithms-3.3.1.2
- - basically moved the deepseq to seq the trr instead of brr
+ - moved the deepseq to evaluate the transpose(B) instead of B
  -}
 mmultP  :: Monad m
         => Array U DIM2 Double

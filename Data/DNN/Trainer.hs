@@ -85,8 +85,7 @@ contraDiv !bxi = do
 forwardErr :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
            => Matrix U B I -> Matrix U B H -> m Double
 forwardErr !bxi !bxh = do
-   nn <- getDNN
-   !bxh' <- P.feedForward nn bxi
+   !bxh' <- feedForward bxi
    M.mse $ bxh -^ bxh'
 
 -- |Compute the input reconstruction error with the current RBM in the state.
@@ -109,12 +108,6 @@ getCount :: (Monad m, E.MonadError a m, S.MonadState DNNS m)
 getCount = do
    dnns <- S.get
    return $ _count dnns
-
--- |Set the count to a specific value.
-setCount :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
-      => Int -> m ()
-setCount n = do
-   S.get >>= \ x -> S.put x { _count = n }
 
 -- |Increment the count and the return the previous value.
 incCount :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
