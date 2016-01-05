@@ -1,6 +1,8 @@
 Restricted Boltzmann Machine
 ============================
 
+[![Build Status](https://travis-ci.org/aeyakovenko/rbm.svg?branch=master)](https://travis-ci.org/aeyakovenko/rbm)
+
 Implementation of [Hinton's paper](docs/hinton_rbm_guide.pdf?raw=true) on rbms, and [Back Propagation](docs/rojas-backprop.pdf?raw=true).
 
 run `make mnist_data` to generate the test data
