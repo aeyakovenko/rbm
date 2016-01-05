@@ -3,27 +3,36 @@ Restricted Boltzmann Machine
 
 [![Build Status](https://travis-ci.org/aeyakovenko/rbm.svg?branch=master)](https://travis-ci.org/aeyakovenko/rbm)
 
-This is a simple implementation of [RBM](docs/hinton_rbm_guide.pdf?raw=true) and [Back Propagation](docs/rojas-backprop.pdf?raw=true) training.  This library is intendent to serve as an example of Contrastive Divergence and Backpropagation algorithms using the [Repa](https://hackage.haskell.org/package/repa) vector library.
+This is a simple implementation of [RBM](docs/hinton_rbm_guide.pdf?raw=true) and [Back Propagation](docs/rojas-backprop.pdf?raw=true) training.
+
+This library is intendent to serve as an example of Contrastive Divergence and Backpropagation algorithms using the [Repa](https://hackage.haskell.org/package/repa) vector library.
 
 * Data.MLP
+
 Implments the backpropagation algorithm for multi-layer preceptron networks
 
 * Data.RBM
+
 Implements the Contrastive Divergance learning algorithm for a single layer RBM.
 
 * Data.DNN.Trainer
+
 Implements a state monad for live training and monitoring the RBM and MLP.
 
 * Data.Matrix
+
 A class that wraps the Repa matrix APIs to compile check the matrix operations used by the algorithms.
 
 * Data.ImageUtils
+
 Implements bmp and gif generation utilies for monitoring the weights.
 
 * Examples.Mnist
+
 Implements the MNIST training example.
 
 run `make mnist_data` to generate the test data
+
 run `make mnist` to test the mnist training.
 
 After backprop there is very strong correlation between the output and the labels
