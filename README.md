@@ -90,8 +90,10 @@ For backprop generated the output of the RBM run backwards after backprop traini
 
 Credits
 -------
-* [mhwombat] (https://github.com/mhwombat), for MNIST file format parsing
-* [Ben Lippmeier] (https://hackage.haskell.org/package/repa), and other Repa authors
+* [mhwombat] (https://github.com/mhwombat), for MNIST file format parsing.
+* [The DPH Team] (https://hackage.haskell.org/package/repa), for the awesome Repa package.
+* [Geoffrey Hinton] (http://www.cs.toronto.edu/~hinton/) for the numerious RBM papers.
+* [Raul Rojas] (http://page.mi.fu-berlin.de/rojas/neural/) for the amazing book on Neural Networks.
 
 TODO
 ----
