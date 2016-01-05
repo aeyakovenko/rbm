@@ -34,7 +34,7 @@ trainCD = forever $ do
         when (0 == cnt `mod` 1000) $ do         -- when we trained 1k times
            nns <- T.getDNN                   
            ww <- M.cast1 <$> M.transpose (last nns)
-           liftIO $ I.appendGIF "train.gif" ww  -- animate the last layer of the dnn
+           liftIO $ I.appendGIF "rbm.gif" ww  -- animate the last layer of the dnn
            when (cnt >= 100000) $ T.finish_     -- terminiate after 100k
 
 trainBP :: T.Trainer IO ()
@@ -51,7 +51,7 @@ trainBP = forever $ do
         when (0 == cnt `mod` 10000) $ do           -- draw a digit with the network
            gen <- T.backward (Matrix $ toLabelM [0..9]) -- for each digit
                                                         -- run the network backward
-           liftIO $ I.appendGIF file gen                -- animiate the result
+           liftIO $ I.appendGIF "bp.gif" gen            -- animiate the result
            when (cnt >= 100000) $ T.finish_        -- terminiate after 100k
  
 ```
