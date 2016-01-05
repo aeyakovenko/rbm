@@ -21,6 +21,7 @@ Implements the Contrastive Divergance learning algorithm for a single layer RBM.
 Implements a state monad for live training and monitoring the RBM and MLP.  You can write simple scripts to control and monitor the training.
 
 ```Haskell
+-- see Examples/Mnist.hs
 trainCD :: T.Trainer IO ()
 trainCD = forever $ do
   T.setLearnRate 0.001                          -- set the learning rate
@@ -34,7 +35,7 @@ trainCD = forever $ do
         when (0 == cnt `mod` 1000) $ do         -- when we trained 1k times
            nns <- T.getDNN                   
            ww <- M.cast1 <$> M.transpose (last nns)
-           liftIO $ I.appendGIF "rbm.gif" ww  -- animate the last layer of the dnn
+           liftIO $ I.appendGIF "rbm.gif" ww    -- animate the last layer of the dnn
            when (cnt >= 100000) $ T.finish_     -- terminiate after 100k
 
 trainBP :: T.Trainer IO ()
@@ -42,17 +43,16 @@ trainBP = forever $ do
   T.setLearnRate 0.001
   let batchids = [0..468::Int]
   forM_ batchids $ \ ix -> do
-     bbatch <- liftIO $ readBatch ix               -- data
-     blabel <- liftIO $ readLabel ix               -- labels for the data
+     bbatch <- liftIO $ readBatch ix                     -- data
+     blabel <- liftIO $ readLabel ix                     -- labels for the data
      sbatch <- mapM M.d2u $ M.splitRows rowCount bbatch
      slabel <- mapM M.d2u $ M.splitRows rowCount blabel
      forM_ (zip sbatch slabel) $ \ (batch,label) -> do
-        T.backProp batch label                     -- train the backprop
-        when (0 == cnt `mod` 10000) $ do           -- draw a digit with the network
-           gen <- T.backward (Matrix $ toLabelM [0..9]) -- for each digit
-                                                        -- run the network backward
-           liftIO $ I.appendGIF "bp.gif" gen            -- animiate the result
-           when (cnt >= 100000) $ T.finish_        -- terminiate after 100k
+        T.backProp batch label                           -- train the backprop
+        when (0 == cnt `mod` 10000) $ do                 -- draw a digit with the network
+           gen <- T.backward (Matrix $ toLabelM [0..9])  -- for each digit run the network backward
+           liftIO $ I.appendGIF "bp.gif" gen             -- animiate the result
+           when (cnt >= 100000) $ T.finish_              -- terminiate after 100k
  
 ```
 
@@ -151,10 +151,14 @@ For backprop generated the output of the RBM run backwards after backprop traini
 
 ![dist/bp1.gif](results/bp13.gif?raw=true)
 
+Author
+------
+* [Anatoly Yakovenko] (http://aeyakovenko.github.io)
+
 Credits
 -------
-* [mhwombat] (https://github.com/mhwombat), for MNIST file format parsing.
-* [The DPH Team] (https://hackage.haskell.org/package/repa), for the awesome Repa package.
+* [mhwombat] (https://github.com/mhwombat) for MNIST file format parsing.
+* [The DPH Team] (https://hackage.haskell.org/package/repa) for the awesome Repa package.
 * [Geoffrey Hinton] (http://www.cs.toronto.edu/~hinton/) for the numerious RBM papers.
 * [Raul Rojas] (http://page.mi.fu-berlin.de/rojas/neural/) for the amazing book on Neural Networks.
 
