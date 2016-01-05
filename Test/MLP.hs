@@ -52,9 +52,9 @@ prop_backProp bs ri nh = runIdentity $ do
          outs <- mapM M.d2u $ M.splitRows (fi ri) output
          mapM_ (uncurry T.backProp) $ zip ins outs
          err <- T.forwardErr input output
-         when (err < 0.20) (T.finish True)
          cnt <- T.getCount
-         when (cnt > 1000) (T.finish False)
+         when (err >= 0.20 && cnt > 1000) (T.finish False)
+         when (err < 0.20) (T.finish True)
    fst <$> T.run mlp train
 
 prop_backProp1 :: Bool
@@ -147,9 +147,7 @@ prop_DxE = runIdentity $ do
    return $ M.toList r1a ++ M.toList r1b == M.toList r12
 
 prop_finish_ :: Bool
-prop_finish_ = () == rv
-   where mlp = new 0 []
-         rv = fst $ runIdentity $ T.run mlp T.finish_
+prop_finish_ = () == (fst $ runIdentity $ T.run (new 0 []) T.finish_)
 
 prop_poplast :: Bool
 prop_poplast = (2,3) == rv
