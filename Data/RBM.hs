@@ -24,8 +24,10 @@ import Data.Matrix(Matrix(..)
                   ,B
                   )
 
--- | weight matrix, numInputs x numHidden
--- | where the bias node is the first node
+{-|
+ - weight matrix, numInputs x numHidden
+ - where the bias node is the first node
+ --}
 type RBM = Matrix U I H
 
 -- |Create an rbm with some randomized weights
@@ -67,6 +69,7 @@ contraDiv lc ixh seed bxi = do
    M.d2u $ ixh +^ wd'
 {-# INLINE contraDiv #-}
 
+-- |calculate the difference between the current weights and generated weights
 weightDiff :: Monad m => Int -> Matrix U I H -> Matrix U B I -> m (Matrix U I H)
 weightDiff seed ixh bxi = do
    let (s1:s2:_) = seeds seed
@@ -114,15 +117,17 @@ seeds :: Int -> [Int]
 seeds seed = R.randoms (R.mkStdGen seed)
 {-# INLINE seeds #-}
 
--- | Generate a sample for each value.  If the random number is less
--- | then the value return 1, otherwise return 0.
+{-|
+ - Generate a sample for each value.  If the random number is less
+ - then the value return 1, otherwise return 0.
+ --}
 checkP ::  Double -> Double -> Double
 checkP gen rand
    | gen > rand = 1
    | otherwise = 0
 {-# INLINE checkP #-}
 
--- | sigmoid function
+-- |sigmoid function
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))
 {-# INLINE sigmoid #-}

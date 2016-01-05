@@ -30,6 +30,7 @@ feedForward nn ins = M.cast2 <$> foldM feed ins nn
    where feed a b = M.cast2 <$> feedForward1 a b
 {-# INLINE feedForward #-}
 
+-- |run the backpropagation algorithm
 backPropagate :: Monad m => MLP -> Double -> Matrix U B I -> Matrix U B H -> m (MLP, Double)
 backPropagate nn lc ins tbj = do
    outs <- scanForward ins nn
@@ -37,15 +38,15 @@ backPropagate nn lc ins tbj = do
    let rnn = reverse nn
    let result = head routs
 
-   --output layer backprop
+   -- |output layer backprop
    !errm <- M.d2u $ result -^ tbj
    !odbh <- backPropOutput result errm
 
-   --hiddel layer backprop results
+   -- |hiddel layer backprop results
    let back !delta !ons = M.cast2 <$> backPropHidden delta ons
    !rdbhs <- scanM back odbh (zip (tail routs) rnn)
 
-   --apply the backprops
+   -- |apply the backprops
    let dbhs = tail $ reverse rdbhs
    let inss = map M.cast2 outs
    unn <- mapM (applyBackPropH lc) (zip3 nn dbhs inss)
@@ -59,10 +60,10 @@ applyBackPropH lc !(wij,dbh,obi) = do
    oib <- M.transpose obi
    lij <- oib `M.mmult` dbh
 
-   --calculate the average weight and average update
+   -- |calculate the average weight and average update
    !wave <- M.sum $ M.map abs wij
    !uave <- M.sum $ M.map abs lij
-   --scale the updates to the learning rate
+   -- |scale the updates to the learning rate
    let lc' | wave > uave || uave == 0 = lc 
            | otherwise = (wave / uave) * lc 
    let uij = M.map ((*) (negate lc')) lij
@@ -74,7 +75,7 @@ backPropOutput :: Monad m => Matrix U B H -> Matrix U B H -> m (Matrix U B H)
 backPropOutput obj ebj = M.d2u $ (M.map dsigmoid obj) *^ ebj 
 {-# INLINE backPropOutput #-}
 
---calculate the  backprop for the hidden layers
+-- |calculate the backprop for the hidden layers
 backPropHidden :: Monad m => Matrix U B H -> (Matrix U B I, Matrix U I H) -> m (Matrix U B I)
 backPropHidden dbh (obi,wih) = do
    dib <- (wih `M.mmultT` dbh)
@@ -82,11 +83,13 @@ backPropHidden dbh (obi,wih) = do
    M.d2u $ (M.map dsigmoid obi) *^ dbi
 {-# INLINE backPropHidden #-}
 
+-- |run the feedforward algorithm over all the layers
 scanForward :: Monad m => Matrix U B I -> MLP -> m ([Matrix U B H])
 scanForward ins nns = (map M.cast2) <$> scanM feed ins nns
    where feed ii nn = M.cast2 <$> feedForward1 ii nn
 {-# INLINE scanForward #-}
 
+-- |run the feedforward algorithm over 1 layer
 feedForward1 :: Monad m => Matrix U B I -> Matrix U I H -> m (Matrix U B H)
 feedForward1 !ibi wij = do
    sbj <- ibi `M.mmult` wij
@@ -95,6 +98,7 @@ feedForward1 !ibi wij = do
    M.d2u $ M.traverse update sbj
 {-# INLINE feedForward1 #-}
 
+-- |monadic scan
 scanM :: (Monad m) =>  (a -> b -> m a) -> a -> [b] -> m [a]
 scanM _ a [] = return [a]
 scanM f a ls = do
@@ -102,7 +106,6 @@ scanM f a ls = do
    xs <- scanM f x (tail ls)
    return (a:xs)
 {-# INLINE scanM #-}
-
 
 sigmoid :: Double -> Double
 sigmoid d = 1 / (1 + (exp (negate d)))

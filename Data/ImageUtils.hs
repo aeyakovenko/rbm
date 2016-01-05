@@ -19,6 +19,7 @@ import Data.Matrix(Matrix(..), U, B, I)
 import qualified Data.Vector.Storable as VS
 import Data.Word(Word8)
 
+-- |generate a bitmap from a square matrix
 generateBox::Monad m => Matrix U B I -> m (R.Array R.U R.DIM2 Word8)
 generateBox mm@(Matrix bxi) = do
    !minv <- M.fold min (read "Infinity") mm
@@ -58,6 +59,7 @@ toImage :: Monad m => R.Array R.U R.DIM2 Word8 -> m (G.Image G.Pixel8)
 toImage img = do
    return $ G.Image (R.row $ R.extent img) (R.col $ R.extent img) $ VS.fromList $ R.toList img
 
+-- |append a bitmap to the gif file
 appendGIF:: String -> Matrix U B I -> IO ()
 appendGIF sfile mm' = do
    mm <- generateBox mm'
@@ -72,6 +74,7 @@ appendGIF sfile mm' = do
    putStrLn $ concat ["writing image: ", sfile]
    checkE $ G.writeGifImages sfile G.LoopingForever (images ++ [img])
 
+-- |write out a bitmap
 writeBMP::String -> Matrix U B I -> IO ()
 writeBMP sfile bxi = do
    image <- generateBox bxi
@@ -79,7 +82,7 @@ writeBMP sfile bxi = do
    putStrLn $ concat ["writing image: ", sfile]
    R.writeImageToBMP sfile ar
 
-
+-- |concatinate multiple gifs
 gifCat :: String -> [String] -> IO ()
 gifCat _ [] = return ()
 gifCat f1 (f2:rest) = do 
