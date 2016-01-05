@@ -58,11 +58,37 @@ trainBP = forever $ do
 
 * Data.Matrix
 
-A class that wraps the Repa matrix APIs to compile check the matrix operations used by the algorithms.
+A class that wraps the Repa matrix APIs to compile check the matrix operations used by the algorithms.  For example:
+
+```Haskell
+
+-- symbolic types for the weight matrix and input data shapes
+data I   -- input nodes
+data H   -- hidden nodes
+data B   -- number of batches
+
+type RBM = Matrix U I H
+
+-- We can constrain the weight and input matrix types
+-- such the compiler will make sure that all the matrix operations
+-- correctly match up to what we expect.
+hiddenPs :: (Monad m) => RBM -> Matrix U B I -> m (Matrix U B H)
+hiddenPs ixh bxi = do
+   -- mmult :: Monad m => (Matrix U a b) -> (Matrix U b c) -> m (Matrix U a c)
+   -- the compiler will verify the shape of the input and output matrixes.
+   !bxh <- bxi `M.mmult` ixh 
+   -- this will cause a compile time error
+   -- since the output of this function is :: Matrix U B H
+   -- !bxh <- ixh `M.mmult` bxi 
+   let update _ _ 0 = 1 -- ^ set bias output to 1
+       update v _ _ = sigmoid v
+   -- preseves the type of bxh since the shape doesn't change
+   M.d2u $ M.traverse update bxh
+```
 
 * Data.ImageUtils
 
-Implements bmp and gif generation utilies for monitoring the weights.
+Implements bmp and gif generation utilies for monitoring the weights.  Only supports square input node sizes.
 
 * Examples.Mnist
 
