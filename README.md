@@ -18,7 +18,43 @@ Implements the Contrastive Divergance learning algorithm for a single layer RBM.
 
 * Data.DNN.Trainer
 
-Implements a state monad for live training and monitoring the RBM and MLP.
+Implements a state monad for live training and monitoring the RBM and MLP.  You can write simple scripts to control and monitor the training.
+
+```Haskell
+trainCD :: T.Trainer IO ()
+trainCD = forever $ do
+  T.setLearnRate 0.001                          -- set the learning rate
+  let batchids = [0..468::Int] 
+  forM_ batchids $ \ ix -> do
+     big <- liftIO $ readBatch ix               -- read the batch data
+     small <- mapM M.d2u $ M.splitRows 5 big    -- split the data into small chunks
+     forM_ small $ \ batch -> do
+        T.contraDiv batch                       -- train each small chunk
+        cnt <- T.getCount
+        when (0 == cnt `mod` 1000) $ do         -- when we trained 1k times
+           nns <- T.getDNN                   
+           ww <- M.cast1 <$> M.transpose (last nns)
+           liftIO $ I.appendGIF "train.gif" ww  -- animate the last layer of the dnn
+           when (cnt >= 100000) $ T.finish_     -- terminiate after 100k
+
+trainBP :: T.Trainer IO ()
+trainBP = forever $ do
+  T.setLearnRate 0.001
+  let batchids = [0..468::Int]
+  forM_ batchids $ \ ix -> do
+     bbatch <- liftIO $ readBatch ix               -- data
+     blabel <- liftIO $ readLabel ix               -- labels for the data
+     sbatch <- mapM M.d2u $ M.splitRows rowCount bbatch
+     slabel <- mapM M.d2u $ M.splitRows rowCount blabel
+     forM_ (zip sbatch slabel) $ \ (batch,label) -> do
+        T.backProp batch label                     -- train the backprop
+        when (0 == cnt `mod` 10000) $ do           -- draw a digit with the network
+           gen <- T.backward (Matrix $ toLabelM [0..9]) -- for each digit
+                                                        -- run the network backward
+           liftIO $ I.appendGIF file gen                -- animiate the result
+           when (cnt >= 100000) $ T.finish_        -- terminiate after 100k
+ 
+```
 
 * Data.Matrix
 
