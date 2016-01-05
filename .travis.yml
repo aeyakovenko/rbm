@@ -11,6 +11,7 @@ install:
  - cabal --version
  - cabal update
  - cabal install --enable-tests --enable-benchmarks --only-dependencies
+ - cabal install hpc-coveralls
 
 script:
  - cabal configure --enable-tests --enable-benchmarks -v2
@@ -26,3 +27,6 @@ script:
       echo "expected '$SRC_TGZ' not found";
       exit 1;
    fi
+
+after_script:
+   hpc-coveralls test-all --display-report --repo-token=15KpYJ4FssvAiuhg5OBivEQbPYPn6aMSW
