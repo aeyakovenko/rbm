@@ -258,32 +258,3 @@ mnist = do
             mapM_ (testBatch bp) [0..9]
             return bp
    foldM_ train tr3 [1::Int ..] 
-
-
-   -- bp1 <- B.decodeFile "dist/bp1"
-   --    <|> do bp1 <- snd <$> (T.run tr3 $ trainBP "dist/bp1.gif" 0.01 0.001)
-   --           B.encodeFile "dist/bp1" bp1
-   --           return bp1
-   -- mapM_ (testBatch bp1) [0..9]
-
-   -- bp2 <- B.decodeFile "dist/bp2"
-   --    <|> do bp2 <- snd <$> (T.run bp1 $ trainBP "dist/bp2.gif" 0.01 0.001)
-   --           B.encodeFile "dist/bp2" bp2
-   --           return bp2
-   -- mapM_ (testBatch bp2) [0..9]
-
-   -- bp3 <- B.decodeFile "dist/bp3"
-   --    <|> do bp3 <- snd <$> (T.run bp2 $ trainBP "dist/bp3.gif" 0.01 0.001)
-   --           B.encodeFile "dist/bp3" bp3
-   --           return bp3
-
-   -- mapM_ (testBatch bp3) [0..9]
-
-
-   -- bp4 <- B.decodeFile "dist/bp4"
-   --    <|> do bp4 <- snd <$> (T.run bp3 $ trainBP "dist/bp4.gif" 0.01 0.001)
-   --           B.encodeFile "dist/bp4" bp4
-   --           return bp4
-
-   -- mapM_ (testBatch bp4) [0..9]
-

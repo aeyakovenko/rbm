@@ -3,7 +3,25 @@ Restricted Boltzmann Machine
 
 [![Build Status](https://travis-ci.org/aeyakovenko/rbm.svg?branch=master)](https://travis-ci.org/aeyakovenko/rbm)
 
-Implementation of RBM training from [Hinton's paper](docs/hinton_rbm_guide.pdf?raw=true), and [Back Propagation](docs/rojas-backprop.pdf?raw=true).
+This is a simple implementation of [RBM](docs/hinton_rbm_guide.pdf?raw=true) and [Back Propagation](docs/rojas-backprop.pdf?raw=true) training.  This library is intendent to serve as an example of Contrastive Divergence and Backpropagation algorithms using the [Repa](https://hackage.haskell.org/package/repa) vector library.
+
+* Data.MLP
+Implments the backpropagation algorithm for multi-layer preceptron networks
+
+* Data.RBM
+Implements the Contrastive Divergance learning algorithm for a single layer RBM.
+
+* Data.DNN.Trainer
+Implements a state monad for live training and monitoring the RBM and MLP.
+
+* Data.Matrix
+A class that wraps the Repa matrix APIs to compile check the matrix operations used by the algorithms.
+
+* Data.ImageUtils
+Implements bmp and gif generation utilies for monitoring the weights.
+
+* Examples.Mnist
+Implements the MNIST training example.
 
 run `make mnist_data` to generate the test data
 run `make mnist` to test the mnist training.
@@ -40,7 +58,7 @@ label|      correlation
    8 | 0.96970036917824
    9 | 0.97368923077333
 
-As you can see, after 250k minibatches there is a significant improvement in digit recognition.
+After 250k minibatches there is a significant improvement in digit recognition.
 
 Monitoring Progress
 -------------------
@@ -57,6 +75,17 @@ Thrid layer. My guess is that the box on the top left is related to the bias nod
 
 ![dist/rbm1.gif](results/rbm3.gif?raw=true)
 
-For backprop generated the output of the RBM run backwards after backprop training the classes.  The gif represents about 250k minibatches of 5 images at 0.01 learning rate.   The network slowly converges on what looks like the numbers its trying to classify.
+For backprop generated the output of the RBM run backwards after backprop training the classes.  The gif represents about 250k minibatches of 5 images at 0.01 learning rate.  The initial output shows the generic digit image that the network learned after the RBM training step for each class.  With backpropagation the network slowly converges on what looks like the numbers its trying to classify as they are separatly activated.
 
 ![dist/bp1.gif](results/bp13.gif?raw=true)
+
+Credits
+-------
+* [mhwombat] (https://github.com/mhwombat), for MNIST file format parsing
+* [Ben Lippmeier] (https://hackage.haskell.org/package/repa), and other Repa authors
+
+TODO
+----
+* dropouts
+* activation functions besides sigmoid
+* non square image generation
