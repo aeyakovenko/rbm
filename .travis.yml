@@ -30,5 +30,5 @@ script:
 #   fi
 
 after_script:
-   ~/.cabal/bin/hpc-coveralls perf-RBM rbm-0.1 test-RBM test-Matrix test-MLP --display-report --repo-token=15KpYJ4FssvAiuhg5OBivEQbPYPn6aMSW 
+   ~/.cabal/bin/hpc-coveralls perf-RBM test-RBM test-Matrix test-MLP --display-report --repo-token=15KpYJ4FssvAiuhg5OBivEQbPYPn6aMSW 
  
