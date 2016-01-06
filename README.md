@@ -152,11 +152,11 @@ Monitoring Progress
 
 First layer of weights should approximate the input we are training on.
 
-* initial state
+* output after 1k minibatches
 
 ![rbm-start.png](results/rbm-start.png?raw=true)
 
-* final state
+* final output
 
 ![rbm-final.png](results/rbm-final.png?raw=true)
 
