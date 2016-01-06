@@ -4,7 +4,9 @@ Restricted Boltzmann Machine
 [![Build Status](https://travis-ci.org/aeyakovenko/rbm.svg?branch=master)](https://travis-ci.org/aeyakovenko/rbm)
 [![Coverage Status](https://coveralls.io/repos/aeyakovenko/rbm/badge.svg?branch=master&service=github)](https://coveralls.io/github/aeyakovenko/rbm?branch=master)
 
-This is a simple implementation of Contrastive Divergence training of [Restricted Boltzman Machines](docs/hinton_rbm_guide.pdf?raw=true) and [Back Propagation](docs/rojas-backprop.pdf?raw=true) training of multi layer neural network.  This library is intended to serve as an example implementation of the algorithms using the [Repa](https://hackage.haskell.org/package/repa) vector library.
+This is an implementation of two machine learning algorithms, [Contrastive Divergence](docs/hinton_rbm_guide.pdf?raw=true) and [Back-propagation](docs/rojas-backprop.pdf?raw=true). Contrastive Divergence is used to pre-train each layer of the Neural Network as a Restricted Boltzmann Machine.  So the weights after training approximate the problem space represented by the training dataset.  Back-propagation is then used to classify the data.
+
+This library is intended to serve as an example implementation of the algorithms using the [Repa](https://hackage.haskell.org/package/repa) vector library.
 
 Haddock documentation can be found [here](http://rawgit.com/aeyakovenko/rbm/master/docs/html/rbm/index.html).
 
