@@ -1,3 +1,14 @@
+{-|
+Module      : Data.ImageUtils
+Description : Image utilities for visualizing Nueral Network progress
+Copyright   : (c) Anatoly Yakovenko, 2015-2016
+License     : MIT
+Maintainer  : aeyakovenko@gmail.com
+Stability   : experimental
+Portability : POSIX
+
+This module implements some image utilities for animating training progess.
+-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -18,6 +29,45 @@ import qualified Data.ByteString as BS
 import Data.Matrix(Matrix(..), U, B, I)
 import qualified Data.Vector.Storable as VS
 import Data.Word(Word8)
+
+-- |append a bitmap to the gif file
+appendGIF:: String -> Matrix U B I -> IO ()
+appendGIF sfile mm' = do
+   mm <- generateBox mm'
+   let check (Left err) = error err
+       check (Right a) = a
+       fromDynamic (G.ImageRGB8 im) = (G.greyPalette, 10,  G.extractComponent G.PlaneRed im)
+       fromDynamic _  = error "unexpected image type"
+   images <- (map fromDynamic <$> check <$> G.decodeGifImages <$> (BS.readFile sfile))
+         <|> (return [])
+   normalized <- toImage mm
+   let img = (G.greyPalette, 10, normalized)
+   putStrLn $ concat ["writing image: ", sfile]
+   checkE $ G.writeGifImages sfile G.LoopingForever (images ++ [img])
+
+-- |write out a bitmap
+writeBMP::String -> Matrix U B I -> IO ()
+writeBMP sfile bxi = do
+   image <- generateBox bxi
+   ar <- R.computeUnboxedP $ R.map (\xx -> (xx,xx,xx)) image
+   putStrLn $ concat ["writing image: ", sfile]
+   R.writeImageToBMP sfile ar
+
+-- |concatinate multiple gifs
+gifCat :: String -> [String] -> IO ()
+gifCat _ [] = return ()
+gifCat f1 (f2:rest) = do 
+   let fromDynamic (G.ImageRGB8 im) = (G.greyPalette, 10,  G.extractComponent G.PlaneRed im)
+       fromDynamic _  = error "unexpected image type"
+       check (Left err) = error err
+       check (Right a) = a
+       getImages sfile = do (map fromDynamic <$> check <$> G.decodeGifImages <$> (BS.readFile sfile))
+                        <|> (return [])
+   f1s <- getImages f1
+   f2s <- getImages f2
+   putStrLn $ concat ["writing image: ", f1]
+   checkE $ G.writeGifImages f1 G.LoopingForever (f1s ++ f2s)
+   gifCat f1 rest
 
 -- |generate a bitmap from a square matrix
 generateBox::Monad m => Matrix U B I -> m (R.Array R.U R.DIM2 Word8)
@@ -59,42 +109,4 @@ toImage :: Monad m => R.Array R.U R.DIM2 Word8 -> m (G.Image G.Pixel8)
 toImage img = do
    return $ G.Image (R.row $ R.extent img) (R.col $ R.extent img) $ VS.fromList $ R.toList img
 
--- |append a bitmap to the gif file
-appendGIF:: String -> Matrix U B I -> IO ()
-appendGIF sfile mm' = do
-   mm <- generateBox mm'
-   let check (Left err) = error err
-       check (Right a) = a
-       fromDynamic (G.ImageRGB8 im) = (G.greyPalette, 10,  G.extractComponent G.PlaneRed im)
-       fromDynamic _  = error "unexpected image type"
-   images <- (map fromDynamic <$> check <$> G.decodeGifImages <$> (BS.readFile sfile))
-         <|> (return [])
-   normalized <- toImage mm
-   let img = (G.greyPalette, 10, normalized)
-   putStrLn $ concat ["writing image: ", sfile]
-   checkE $ G.writeGifImages sfile G.LoopingForever (images ++ [img])
-
--- |write out a bitmap
-writeBMP::String -> Matrix U B I -> IO ()
-writeBMP sfile bxi = do
-   image <- generateBox bxi
-   ar <- R.computeUnboxedP $ R.map (\xx -> (xx,xx,xx)) image
-   putStrLn $ concat ["writing image: ", sfile]
-   R.writeImageToBMP sfile ar
-
--- |concatinate multiple gifs
-gifCat :: String -> [String] -> IO ()
-gifCat _ [] = return ()
-gifCat f1 (f2:rest) = do 
-   let fromDynamic (G.ImageRGB8 im) = (G.greyPalette, 10,  G.extractComponent G.PlaneRed im)
-       fromDynamic _  = error "unexpected image type"
-       check (Left err) = error err
-       check (Right a) = a
-       getImages sfile = do (map fromDynamic <$> check <$> G.decodeGifImages <$> (BS.readFile sfile))
-                        <|> (return [])
-   f1s <- getImages f1
-   f2s <- getImages f2
-   putStrLn $ concat ["writing image: ", f1]
-   checkE $ G.writeGifImages f1 G.LoopingForever (f1s ++ f2s)
-   gifCat f1 rest
 

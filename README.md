@@ -6,19 +6,22 @@ Restricted Boltzmann Machine
 
 This is a simple implementation of [RBM](docs/hinton_rbm_guide.pdf?raw=true) and [Back Propagation](docs/rojas-backprop.pdf?raw=true) training.
 
-This library is intendent to serve as an example of Contrastive Divergence and Backpropagation algorithms using the [Repa](https://hackage.haskell.org/package/repa) vector library.
+This library is intended to serve as an example implementation of Contrastive Divergence and Back-Propagation algorithms using the [Repa](https://hackage.haskell.org/package/repa) vector library.
 
-* Data.MLP
+Data.MLP
+--------
 
-Implments the backpropagation algorithm for multi-layer preceptron networks
+Implements the back-propagation algorithm for multi-layer preceptron networks
 
-* Data.RBM
+Data.RBM
+--------
 
-Implements the Contrastive Divergance learning algorithm for a single layer RBM.
+Implements the Contrastive Divergence learning algorithm for a single layer RBM.  The layers can easily be composed together as done in Data.DNN.Trainer.
 
-* Data.DNN.Trainer
+Data.DNN.Trainer
+----------------
 
-Implements a state monad for live training and monitoring the RBM and MLP.  You can write simple scripts to control and monitor the training.
+Implements a state-full monad for live training and monitoring the RBM and MLP.  You can write simple scripts to control and monitor the training.
 
 ```Haskell
 -- see Examples/Mnist.hs
@@ -32,7 +35,7 @@ trainCD = forever $ do
      forM_ small $ \ batch -> do
         T.contraDiv batch                       -- train each small chunk
         cnt <- T.getCount
-        when (0 == cnt `mod` 1000) $ do         -- when we trained 1k times
+        when (0 == cnt `mod` 1000) $ do         -- animate the weight matrix updates
            nns <- T.getDNN                   
            ww <- M.cast1 <$> M.transpose (last nns)
            liftIO $ I.appendGIF "rbm.gif" ww    -- animate the last layer of the dnn
@@ -49,6 +52,7 @@ trainBP = forever $ do
      slabel <- mapM M.d2u $ M.splitRows rowCount blabel
      forM_ (zip sbatch slabel) $ \ (batch,label) -> do
         T.backProp batch label                           -- train the backprop
+        cnt <- T.getCount
         when (0 == cnt `mod` 10000) $ do                 -- draw a digit with the network
            gen <- T.backward (Matrix $ toLabelM [0..9])  -- for each digit run the network backward
            liftIO $ I.appendGIF "bp.gif" gen             -- animiate the result
@@ -56,9 +60,10 @@ trainBP = forever $ do
  
 ```
 
-* Data.Matrix
+Data.Matrix
+-----------
 
-A class that wraps the Repa matrix APIs to compile check the matrix operations used by the algorithms.  For example:
+A class that wraps the Repa APIs to compile check the matrix operations used by the algorithms.  For example:
 
 ```Haskell
 
@@ -76,21 +81,21 @@ hiddenPs :: (Monad m) => RBM -> Matrix U B I -> m (Matrix U B H)
 hiddenPs ixh bxi = do
    -- mmult :: Monad m => (Matrix U a b) -> (Matrix U b c) -> m (Matrix U a c)
    -- the compiler will verify the shape of the input and output matrixes.
+   -- !bxh <- ixh `M.mmult` bxi would cause an error
    !bxh <- bxi `M.mmult` ixh 
-   -- this will cause a compile time error
-   -- since the output of this function is :: Matrix U B H
-   -- !bxh <- ixh `M.mmult` bxi 
-   let update _ _ 0 = 1 -- ^ set bias output to 1
+   let update _ _ 0 = 1
        update v _ _ = sigmoid v
    -- preseves the type of bxh since the shape doesn't change
    M.d2u $ M.traverse update bxh
 ```
 
-* Data.ImageUtils
+Data.ImageUtils
+---------------
 
 Implements bmp and gif generation utilies for monitoring the weights.  Only supports square input node sizes.
 
-* Examples.Mnist
+Examples.Mnist
+--------------
 
 Implements the MNIST training example.
 
@@ -151,6 +156,13 @@ For backprop generated the output of the RBM run backwards after backprop traini
 
 ![dist/bp1.gif](results/bp13.gif?raw=true)
 
+Performance
+-----------
+
+The Repa library targets multi-core CPUs, and the program effectively scales with `+RTS -N`.  The minibatch size thats used for training has a fairly significant impact on performance, the larger the minibatch size you can get away with the better performance you get.
+
+I haven't put any effort in optimizing this algorithm to utilize all of systems memory.  My naiive attempt seemed to have caused too many pagefaults and the running time bacame really slow.
+
 Author
 ------
 * [Anatoly Yakovenko] (http://aeyakovenko.github.io)
@@ -161,9 +173,11 @@ Credits
 * [The DPH Team] (https://hackage.haskell.org/package/repa) for the awesome Repa package.
 * [Geoffrey Hinton] (http://www.cs.toronto.edu/~hinton/) for the numerious RBM papers.
 * [Raul Rojas] (http://page.mi.fu-berlin.de/rojas/neural/) for the amazing book on Neural Networks.
+* The haskell community that provided all the great libraries.
 
 TODO
 ----
 * dropouts
 * activation functions besides sigmoid
 * non square image generation
+* use faster image loading APIs from repa when reading input data
