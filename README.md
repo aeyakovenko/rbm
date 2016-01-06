@@ -152,7 +152,7 @@ After 250k minibatches there is a significant improvement in digit recognition.
 Monitoring Progress
 -------------------
 
-First layer of weights should approximate the input we are training on.  It can be seen here (its a large gif, so it takes a few seconds to load)
+First layer of weights should approximate the input we are training on.
 
 * initial state
 
@@ -162,7 +162,7 @@ First layer of weights should approximate the input we are training on.  It can 
 
 ![rbm-final.png](results/rbm-final.png?raw=true)
 
-* animation
+* animation (its a large gif, so it takes a few seconds to load)
 
 ![rbm.gif](results/rbm1.gif?raw=true)
 
