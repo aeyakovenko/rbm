@@ -23,6 +23,20 @@ Implements the Contrastive Divergence learning algorithm for a single layer RBM.
 Data.DNN.Trainer
 ----------------
 
+=======
+Data.MLP
+--------
+
+Implements the back-propagation algorithm for multi-layer preceptron networks
+
+Data.RBM
+--------
+
+Implements the Contrastive Divergence learning algorithm for a single layer RBM.  The layers can easily be composed together as done in Data.DNN.Trainer.
+
+Data.DNN.Trainer
+----------------
+
 Implements a state-full monad for live training and monitoring the RBM and MLP.  You can write simple scripts to control and monitor the training.
 
 ```Haskell
