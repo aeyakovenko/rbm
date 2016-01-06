@@ -1,3 +1,15 @@
+{-|
+Module      : Data.RBM
+Description : RBM Contrastive Divergence training
+Copyright   : (c) Anatoly Yakovenko, 2015-2016
+License     : MIT
+Maintainer  : aeyakovenko@gmail.com
+Stability   : experimental
+Portability : POSIX
+
+This module implements the Contrastive Diverence training algorithm for Restricted Boltzman Machines.
+-}
+
 {-# LANGUAGE BangPatterns #-}
 module Data.RBM(new
                ,RBM
@@ -88,7 +100,7 @@ weightDiff seed ixh bxi = do
 hiddenPs :: (Monad m) => RBM -> Matrix U B I -> m (Matrix U B H)
 hiddenPs ixh bxi = do
    !bxh <- bxi `M.mmult` ixh 
-   let update _ _ 0 = 1 -- ^ set bias output to 1
+   let update _ _ 0 = 1 -- set bias output to 1
        update v _ _ = sigmoid v
    M.d2u $ M.traverse update bxh
 {-# INLINE hiddenPs #-}
@@ -101,7 +113,7 @@ hiddenPs ixh bxi = do
 inputPs :: (Monad m) => RBM -> Matrix U B H -> m (Matrix U I B)
 inputPs ixh bxh = do
    !ixb <- ixh `M.mmultT` bxh
-   let update _ 0 _ = 1 -- ^ set bias output to 1
+   let update _ 0 _ = 1 -- set bias output to 1
        update v _ _ = sigmoid v
    M.d2u $ M.traverse update ixb
 {-# INLINE inputPs #-}

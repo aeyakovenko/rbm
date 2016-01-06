@@ -1,3 +1,14 @@
+{-|
+Module      : Data.Matrix
+Description : Typesafe matrix operations.
+Copyright   : (c) Anatoly Yakovenko, 2015-2016
+License     : MIT
+Maintainer  : aeyakovenko@gmail.com
+Stability   : experimental
+Portability : POSIX
+
+This module implements some matrix operations using the Repa package that track the symbolic shape of the matrix.
+-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -30,10 +41,14 @@ import Data.Array.Repa(Array
                       ,(:.)((:.))
                       ,All(All)
                       )
+-- | num hidden nodes
+data H 
 
-data H -- ^ num hidden nodes
-data I -- ^ num input nodes
-data B -- ^ batch size
+-- | num input nodes
+data I 
+
+-- | num inputs in batch
+data B 
 
 -- | wraps the Repa Array types so we can typecheck the results of
 -- | the matrix operations
@@ -44,6 +59,7 @@ instance Show (Matrix U a b) where
 instance NFData (Matrix U a b) where
    rnf (Matrix ar) = ar `R.deepSeqArray` ()
 
+-- |Class implementing the typesafe Matrix apis
 class MatrixOps a b where
    mmult :: Monad m => (Matrix U a b) -> (Matrix U b c) -> m (Matrix U a c)
    mmult (Matrix ab) (Matrix ba) = Matrix <$> (ab `mmultP` ba)
@@ -158,7 +174,7 @@ instance Binary (Matrix U a b) where
    put m = put (shape m, toList m)
    get = (uncurry fromList) <$> get
 
-{--
+{-|
  - matrix multiply
  - A x (transpose B)
  - based on mmultP from repa-algorithms-3.3.1.2
@@ -180,7 +196,7 @@ mmultTP arr trr
                         (Unsafe.unsafeSlice trr (Any :. (R.col ix) :. All))
 {-# NOINLINE mmultTP #-}
 
-{--
+{-|
  - regular matrix multiply
  - A x B
  - based on mmultP from repa-algorithms-3.3.1.2

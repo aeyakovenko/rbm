@@ -1,6 +1,39 @@
+{-|
+Module      : Data.DNN.Trainer
+Description : Monad for training DNNs
+Copyright   : (c) Anatoly Yakovenko, 2015-2016
+License     : MIT
+Maintainer  : aeyakovenko@gmail.com
+Stability   : experimental
+Portability : POSIX
+
+This module implements a monad for training a DNN using back-propagation or contrastive divergence.
+-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
-module Data.DNN.Trainer where
+module Data.DNN.Trainer(Trainer
+                       ,finish
+                       ,finish_
+                       ,run
+                       ,backward
+                       ,feedForward
+                       ,backProp
+                       ,contraDiv
+                       ,forwardErr
+                       ,reconErr
+                       ,reconstruct
+                       ,getCount
+                       ,incCount
+                       ,putDNN
+                       ,getDNN
+                       ,popLastLayer
+                       ,pushLastLayer
+                       ,nextSeed
+                       ,setLearnRate
+                       ,getLearnRate
+                       )where
+
+
 
 import qualified Data.RBM as R
 import qualified Data.MLP as P
@@ -16,19 +49,24 @@ import Data.Matrix(Matrix(..)
                   ,B
                   )
 
+-- | network type
 type DNN = [Matrix U I H]
+-- | internal state
 data DNNS = DNNS { _nn :: DNN
                  , _seed :: Int
                  , _count :: Int
                  , _lr :: Double
                  }
 
+-- | training monad type
 type Trainer m a = E.ExceptT a (S.StateT DNNS m) a
 
+-- | terminate the training script
 finish :: (Monad m, E.MonadError a m, S.MonadState DNNS m) 
        => a -> m ()
 finish v = E.throwError v
 
+-- | terminate the training script with ()
 finish_ :: (Monad m, E.MonadError () m, S.MonadState DNNS m) 
         => m ()
 finish_ = finish ()

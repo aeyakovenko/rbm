@@ -10,7 +10,8 @@ Library
                      Data.DNN.Trainer,
                      Data.MLP,
                      Data.Matrix,
-                     Data.ImageUtils
+                     Data.ImageUtils,
+                     Examples.Mnist
   Build-Depends:     base,
                      random,
                      split,
