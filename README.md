@@ -8,7 +8,7 @@ This is a simple implementation of [RBM](docs/hinton_rbm_guide.pdf?raw=true) and
 
 This library is intended to serve as an example implementation of Contrastive Divergence and Back-Propagation algorithms using the [Repa](https://hackage.haskell.org/package/repa) vector library.
 
-Haddock documentation can be found [here](docs/html/rbm/index.html?raw=true)
+Haddock documentation can be found [here](http://rawgit.com/aeyakovenko/rbm/master/docs/html/rbm/index.html)
 
 Data.MLP
 --------
