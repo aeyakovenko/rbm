@@ -154,24 +154,30 @@ Monitoring Progress
 
 First layer of weights should approximate the input we are training on.  It can be seen here (its a large gif, so it takes a few seconds to load)
 
-starting state
+* initial state
+
 ![rbm-start.png](results/rbm-start.png?raw=true)
 
-final state
+* final state
+
 ![rbm-final.png](results/rbm-final.png?raw=true)
 
-animation
+* animation
+
 ![rbm.gif](results/rbm1.gif?raw=true)
 
 For backprop generated the output of the RBM run backwards after backprop training the classes.  The gif represents about 250k minibatches of 5 images at 0.01 learning rate.  The initial output shows the generic digit image that the network learned after the RBM training step for each class.  With backpropagation the network slowly converges on what looks like the numbers its trying to classify as they are separatly activated.
 
-start
+* initial output
+
 ![result-start.png](results/result-start.png?raw=true)
 
-final
+* final output
+
 ![result-final.png](results/result-final.png?raw=true)
 
-animation
+* animation
+
 ![bp.gif](results/bp13.gif?raw=true)
 
 Performance
