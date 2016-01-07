@@ -4,7 +4,7 @@ Restricted Boltzmann Machine
 [![Build Status](https://travis-ci.org/aeyakovenko/rbm.svg?branch=master)](https://travis-ci.org/aeyakovenko/rbm)
 [![Coverage Status](https://coveralls.io/repos/aeyakovenko/rbm/badge.svg?branch=master&service=github)](https://coveralls.io/github/aeyakovenko/rbm?branch=master)
 
-This is an implementation of two machine learning algorithms, [Contrastive Divergence](http://rawgit.com/aeyakovenko/rbm/master/docs/hinton_rbm_guide.pdf) and [Back-propagation](http://rawgit.com/aeyakovenko/rbm/master/docs/rojas-backprop.pdf). Contrastive Divergence is used to pre-train each layer of the Neural Network as a Restricted Boltzmann Machine.  So the weights after training approximate the problem space represented by the training dataset.  Back-propagation is then used to classify the data.
+This is an implementation of two machine learning algorithms, [Contrastive Divergence](http://rawgit.com/aeyakovenko/rbm/master/docs/hinton_rbm_guide.pdf) and [Back-propagation](http://rawgit.com/aeyakovenko/rbm/master/docs/rojas-backprop.pdf). Contrastive Divergence is used to pre-train each layer of the Neural Network as a Restricted Boltzmann Machine.  After the RBM training the weights should approximate the problem space represented by the dataset.  Back-propagation is then used to classify the data.
 
 This library is intended to serve as an example implementation of the algorithms using the [Repa](https://hackage.haskell.org/package/repa) vector library.
 
@@ -13,7 +13,7 @@ Haddock documentation can be found [here](http://rawgit.com/aeyakovenko/rbm/mast
 Data.MLP
 --------
 
-Implements the back-propagation algorithm for multi-layer preceptron networks
+Implements the back-propagation algorithm for multi-layer perceptron networks
 
 Data.RBM
 --------
@@ -23,7 +23,7 @@ Implements the Contrastive Divergence learning algorithm for a single layer RBM.
 Data.MLP
 --------
 
-Implements the back-propagation algorithm for multi-layer preceptron networks
+Implements the back-propagation algorithm for multi-layer perceptron networks
 
 Data.RBM
 --------
@@ -33,7 +33,7 @@ Implements the Contrastive Divergence learning algorithm for a single layer RBM.
 Data.DNN.Trainer
 ----------------
 
-Implements a state-full monad for live training and monitoring the RBM and MLP.  You can write simple scripts to control and monitor the training.
+Implements a stateful monad for live training and monitoring the RBM and MLP.  You can write simple scripts to control and monitor the training.
 
 ```Haskell
 -- see Examples/Mnist.hs
@@ -43,15 +43,15 @@ trainCD = forever $ do
   let batchids = [0..468::Int] 
   forM_ batchids $ \ ix -> do
      big <- liftIO $ readBatch ix               -- read the batch data
-     small <- mapM M.d2u $ M.splitRows 5 big    -- split the data into small chunks
+     small <- mapM M.d2u $ M.splitRows 5 big    -- split the data into mini-batches
      forM_ small $ \ batch -> do
-        T.contraDiv batch                       -- train each small chunk
+        T.contraDiv batch                       -- train each mini-batch
         cnt <- T.getCount
         when (0 == cnt `mod` 1000) $ do         -- animate the weight matrix updates
            nns <- T.getDNN                   
            ww <- M.cast1 <$> M.transpose (last nns)
            liftIO $ I.appendGIF "rbm.gif" ww    -- animate the last layer of the dnn
-           when (cnt >= 100000) $ T.finish_     -- terminiate after 100k
+           when (cnt >= 100000) $ T.finish_     -- terminate after 100k
 
 trainBP :: T.Trainer IO ()
 trainBP = forever $ do
@@ -60,15 +60,15 @@ trainBP = forever $ do
   forM_ batchids $ \ ix -> do
      bbatch <- liftIO $ readBatch ix                     -- data
      blabel <- liftIO $ readLabel ix                     -- labels for the data
-     sbatch <- mapM M.d2u $ M.splitRows rowCount bbatch
+     sbatch <- mapM M.d2u $ M.splitRows rowCount bbatch  -- split into mini-batches
      slabel <- mapM M.d2u $ M.splitRows rowCount blabel
      forM_ (zip sbatch slabel) $ \ (batch,label) -> do
         T.backProp batch label                           -- train the backprop
         cnt <- T.getCount
         when (0 == cnt `mod` 10000) $ do                 -- draw a digit with the network
            gen <- T.backward (Matrix $ toLabelM [0..9])  -- for each digit run the network backward
-           liftIO $ I.appendGIF "bp.gif" gen             -- animiate the result
-           when (cnt >= 100000) $ T.finish_              -- terminiate after 100k
+           liftIO $ I.appendGIF "bp.gif" gen             -- animate the result
+           when (cnt >= 100000) $ T.finish_              -- terminate after 100k
  
 ```
 
@@ -97,14 +97,14 @@ hiddenPs ixh bxi = do
    !bxh <- bxi `M.mmult` ixh 
    let update _ _ 0 = 1
        update v _ _ = sigmoid v
-   -- preseves the type of bxh since the shape doesn't change
+   -- preserves the type of bxh since the shape doesn't change
    M.d2u $ M.traverse update bxh
 ```
 
 Data.ImageUtils
 ---------------
 
-Implements bmp and gif generation utilies for monitoring the weights.  Only supports square input node sizes.
+Implements bmp and gif generation utilities for monitoring the weights.  Only supports square input node sizes.
 
 Examples.Mnist
 --------------
@@ -154,7 +154,7 @@ Monitoring Progress
 
 First layer of weights should approximate the input we are training on.
 
-* output after 1k minibatches
+* output after 1k mini-batches
 
 ![rbm-start.png](results/rbm-start.png?raw=true)
 
@@ -162,11 +162,11 @@ First layer of weights should approximate the input we are training on.
 
 ![rbm-final.png](results/rbm-final.png?raw=true)
 
-* animation (its a large gif, so it takes a few seconds to load)
+* animation (it's a large gif, so it takes a few seconds to load)
 
 ![rbm.gif](results/rbm1.gif?raw=true)
 
-For backprop generated the output of the RBM run backwards after backprop training the classes.  The gif represents about 250k minibatches of 5 images at 0.01 learning rate.  The initial output shows the generic digit image that the network learned after the RBM training step for each class.  With backpropagation the network slowly converges on what looks like the numbers its trying to classify as they are separatly activated.
+For monitoring back-propagation the script generated the output of the neural network run backwards after each batch of backprop training.  The animated gif represents about 250k mini-batches of 5 images at 0.01 learning rate.  The initial output shows the generic digit image that the network learned after the RBM training step for each class.  With back-propagation the network slowly converges on what looks like the numbers it's trying to classify as they are separately activated.
 
 * initial output
 
@@ -183,9 +183,9 @@ For backprop generated the output of the RBM run backwards after backprop traini
 Performance
 -----------
 
-The Repa library targets multi-core CPUs, and the program effectively scales with `+RTS -N`.  The minibatch size thats used for training has a fairly significant impact on performance, the larger the minibatch size you can get away with the better performance you get.
+The Repa library targets multi-core CPUs, and the program effectively scales with `+RTS -N`.  The mini-batch size thats used for training has a fairly significant impact on performance, the larger the mini-batch size you can get away with the better performance you get.
 
-I haven't put any effort in optimizing this algorithm to utilize all of systems memory.  My naiive attempt seemed to have caused too many pagefaults and the running time bacame really slow.
+I haven't put any effort in optimizing this algorithm to utilize all of the system's memory.  My naive attempt seemed to have caused too many page faults and the running time became really slow.
 
 Author
 ------
