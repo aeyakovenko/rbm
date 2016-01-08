@@ -31,6 +31,8 @@ import qualified Data.Vector.Storable as VS
 import Data.Word(Word8)
 
 -- |append a bitmap to the gif file
+-- |the generated bitmap contains B number of images
+-- |each row of size I treated as a square image
 appendGIF:: String -> Matrix U B I -> IO ()
 appendGIF sfile mm' = do
    mm <- generateBox mm'
@@ -46,6 +48,8 @@ appendGIF sfile mm' = do
    checkE $ G.writeGifImages sfile G.LoopingForever (images ++ [img])
 
 -- |write out a bitmap
+-- |the generated bitmap contains B number of images
+-- |each row of size I treated as a square image
 writeBMP::String -> Matrix U B I -> IO ()
 writeBMP sfile bxi = do
    image <- generateBox bxi

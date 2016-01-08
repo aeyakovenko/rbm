@@ -53,6 +53,12 @@ Test-Suite test-MLP
     ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.MLP.test
     Build-Depends:   QuickCheck
 
+Test-Suite test-ImageUtils
+    type:            exitcode-stdio-1.0
+    main-is:         Test/ImageUtils.hs
+    ghc-options:     -Werror -Wall -threaded -O3 -main-is Test.ImageUtils.test
+    Build-Depends:   QuickCheck
+
 
 Executable mnist
     main-is:         Examples/Mnist.hs
