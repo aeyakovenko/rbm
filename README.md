@@ -20,16 +20,6 @@ Data.RBM
 
 Implements the Contrastive Divergence learning algorithm for a single layer RBM.  The layers can easily be composed together as done in Data.DNN.Trainer.
 
-Data.MLP
---------
-
-Implements the back-propagation algorithm for multi-layer perceptron networks
-
-Data.RBM
---------
-
-Implements the Contrastive Divergence learning algorithm for a single layer RBM.  The layers can easily be composed together as done in Data.DNN.Trainer.
-
 Data.DNN.Trainer
 ----------------
 
